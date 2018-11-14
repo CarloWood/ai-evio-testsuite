@@ -1,0 +1,24 @@
+[submodule "cwm4"]
+	path = cwm4
+	url = https://github.com/CarloWood/cwm4.git
+	branch = master
+[submodule "cwds"]
+	path = cwds
+	url = https://github.com/CarloWood/cwds.git
+	branch = master
+[submodule "evio"]
+	path = evio
+	url = https://github.com/CarloWood/evio.git
+	branch = decoder
+[submodule "threadsafe"]
+	path = threadsafe
+	url = https://github.com/CarloWood/ai-threadsafe.git
+	branch = master
+[submodule "utils"]
+	path = utils
+	url = https://github.com/CarloWood/ai-utils.git
+	branch = master
+[submodule "threadpool"]
+	path = threadpool
+	url = https://github.com/CarloWood/threadpool.git
+	branch = master
