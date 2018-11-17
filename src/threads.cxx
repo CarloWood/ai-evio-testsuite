@@ -22,6 +22,8 @@ static void timeout_cb(EV_P_ ev_timer* UNUSED_ARG(w), int UNUSED_ARG(revents))
 static void stdin_cb(EV_P_ ev_io* w, int UNUSED_ARG(revents))
 {
   Dout(dc::notice, "Calling stdin_cb()");
+  std::string line;
+  std::getline(std::cin, line);
   // Called from EventLoopThread::invoke_pending, hence m_loop_mutex is already locked.
   // For one-shot events, one must manually stop the watcher with its corresponding stop function.
   ev_io_stop(EV_A_ w);
@@ -51,11 +53,17 @@ int main()
     {
       {
         auto queue_access = queue.producer_access();
-        if (!(queue_full = queue_access.length() == queue.capacity()))
-          queue_access.move_in([](){
-              Dout(dc::notice|flush_cf, "Thread pool worker doing work (1 second).");
+        static int queue_counter = 99;
+        int len = queue_access.length();
+        if (!(queue_full = len == queue.capacity()))
+        {
+          int qc = ++queue_counter;
+          Dout(dc::notice, "Adding #" << qc << " to the queue with length " << len);
+          queue_access.move_in([qc, len](){
+              Dout(dc::notice|flush_cf, "Thread pool worker executing entry #" << qc << " (sleeping 1 second).");
               std::this_thread::sleep_for(std::chrono::seconds(1));
               return false; });
+        }
       }
       if (!queue_full)
         queue.notify_one();
@@ -66,7 +74,7 @@ int main()
 
   // Add a timer watcher.
   ev_timer timeout_watcher;
-  ev_timer_init(&timeout_watcher, timeout_cb, 2.0, 0.);
+  ev_timer_init(&timeout_watcher, timeout_cb, 4.0, 0.);
   EventLoopThread::instance().start(timeout_watcher);
 
   // Add stdin watcher.
