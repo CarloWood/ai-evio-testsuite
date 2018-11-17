@@ -1,10 +1,6 @@
 AM_CPPFLAGS = -iquote $(top_srcdir) -iquote $(top_srcdir)/cwds
 
-bin_PROGRAMS = socket sockaddr_storage arpa socket_address buffer_test threads
-
-socket_SOURCES = socket.cxx
-socket_CXXFLAGS = @LIBCWD_R_FLAGS@
-socket_LDADD = ../evio/libevio.la ../threadpool/libthreadpool.la ../threadsafe/libthreadsafe.la ../utils/libutils_r.la ../evio/libev-4.24/libev.la ../cwds/libcwds_r.la
+bin_PROGRAMS = sockaddr_storage arpa socket_address buffer_test threads socket_fd socket
 
 sockaddr_storage_SOURCES = sockaddr_storage.cxx
 sockaddr_storage_CXXFLAGS = @LIBCWD_R_FLAGS@
@@ -25,6 +21,14 @@ buffer_test_LDADD = ../evio/libevio.la ../evio/libev-4.24/libev.la ../cwds/libcw
 threads_SOURCES = threads.cxx
 threads_CXXFLAGS = @LIBCWD_R_FLAGS@
 threads_LDADD = ../evio/libevio.la ../threadpool/libthreadpool.la ../threadsafe/libthreadsafe.la ../utils/libutils_r.la ../evio/libev-4.24/libev.la ../cwds/libcwds_r.la
+
+socket_fd_SOURCES = socket_fd.cxx
+socket_fd_CXXFLAGS = @LIBCWD_R_FLAGS@
+socket_fd_LDADD = ../evio/libevio.la ../threadpool/libthreadpool.la ../threadsafe/libthreadsafe.la ../utils/libutils_r.la ../evio/libev-4.24/libev.la ../cwds/libcwds_r.la
+
+socket_SOURCES = socket.cxx
+socket_CXXFLAGS = @LIBCWD_R_FLAGS@
+socket_LDADD = ../evio/libevio.la ../threadpool/libthreadpool.la ../threadsafe/libthreadsafe.la ../utils/libutils_r.la ../evio/libev-4.24/libev.la ../cwds/libcwds_r.la
 
 # --------------- Maintainer's Section
 
