@@ -7,6 +7,8 @@
 #include "evio/OutputDevice.h"
 #include "evio/EventLoopThread.h"
 #include "evio/inet_support.h"
+#include "utils/AIAlert.h"
+#include "utils/debug_ostream_operators.h"
 
 #include <sstream>
 #include <cstring>	// Needed for memset.
@@ -49,9 +51,14 @@ int main()
   // Initialize the IO event loop thread.
   EventLoopThread::instance().init(low_priority_handler);
 
+  try
   {
     boost::intrusive_ptr<Socket> fdp0 = new Socket;
     fdp0->connect_to_server("localhost", 9001);
+  }
+  catch (AIAlert::Error const& error)
+  {
+    Dout(dc::warning, error);
   }
 
   // Wait until all watchers have finished.
@@ -113,6 +120,8 @@ void Socket::connect_to_server(char const* remote_host, int remote_port)
     Dout(dc::notice, "\"Connected\".");
 
   init(fd_remote);
+  // This class does not use input/output buffers but directly overrides read_from_fd and write_to_fd.
+  // Therefore it is not necessary to call input() and output().
   start_input_device();
   start_output_device();
 }

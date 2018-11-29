@@ -17,7 +17,12 @@ class TestInputDevice : public InputDevice
  public:
   TestInputDevice() { }
 
-  void start() { start_input_device(); }
+  void start()
+  {
+    // This object does not use a buffer, but instead overrides read_from_fd directly.
+    // Therefore it is not necessary to call input().
+    start_input_device();
+  }
 
  protected:
   void read_from_fd(int fd) override;   // Read thread.
@@ -28,7 +33,12 @@ class TestOutputDevice : public OutputDevice
  public:
   TestOutputDevice() { }
 
-  void start() { start_output_device(); }
+  void start()
+  {
+    // This object does not use a buffer, but instead overrides write_to_fd directly.
+    // Therefore it is not necessary to call output().
+    start_output_device();
+  }
 
  protected:
   void write_to_fd(int fd) override;    // Write thread.

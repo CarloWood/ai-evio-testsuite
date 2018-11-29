@@ -1,6 +1,6 @@
 AM_CPPFLAGS = -iquote $(top_srcdir) -iquote $(top_srcdir)/cwds
 
-bin_PROGRAMS = sockaddr_storage arpa socket_address buffer_test threads filedescriptor socket_fd socket
+bin_PROGRAMS = sockaddr_storage arpa socket_address buffer_test threads filedescriptor socket_fd socket listen_socket
 
 sockaddr_storage_SOURCES = sockaddr_storage.cxx
 sockaddr_storage_CXXFLAGS = @LIBCWD_R_FLAGS@
@@ -33,6 +33,10 @@ socket_fd_LDADD = ../evio/libevio.la ../threadpool/libthreadpool.la ../threadsaf
 socket_SOURCES = socket.cxx
 socket_CXXFLAGS = @LIBCWD_R_FLAGS@
 socket_LDADD = ../evio/libevio.la ../threadpool/libthreadpool.la ../threadsafe/libthreadsafe.la ../utils/libutils_r.la ../evio/libev-4.24/libev.la ../cwds/libcwds_r.la
+
+listen_socket_SOURCES = listen_socket.cxx
+listen_socket_CXXFLAGS = @LIBCWD_R_FLAGS@
+listen_socket_LDADD = ../evio/libevio.la ../threadpool/libthreadpool.la ../threadsafe/libthreadsafe.la ../utils/libutils_r.la ../evio/libev-4.24/libev.la ../cwds/libcwds_r.la
 
 # --------------- Maintainer's Section
 
