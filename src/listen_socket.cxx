@@ -123,6 +123,8 @@ int main()
   {
     Dout(dc::warning, error);
   }
+
+  Dout(dc::notice, "Leaving main...");
 }
 
 evio::RefCountReleaser Decoder::decode(MsgBlock msg)
