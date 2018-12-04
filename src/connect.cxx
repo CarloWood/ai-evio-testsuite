@@ -23,7 +23,7 @@ using evio::SocketAddress;
 template<threadpool::Timer::time_point::rep count, typename Unit> using Interval = threadpool::Interval<count, Unit>;
 
 // This decoder is not really used because we don't send anything over the socket.
-// However, at least one of input (decoder) or output (stream) must be provided
+// However, at least one of input(decoder) or output(stream) must be provided
 // for each socket, otherwise an assert happens (normally it makes little sense
 // to create a Socket that does no I/O out at all).
 class MyDecoder : public InputDecoder
@@ -38,6 +38,8 @@ class MyDecoder : public InputDecoder
   RefCountReleaser decode(MsgBlock msg) override;
 };
 
+// This is the type of the accepted sockets when a new client connects to our listen socket.
+// It registers both input and output - but also doesn't write anything.
 class MyAcceptedSocket : public Socket
 {
  private:
@@ -59,6 +61,7 @@ class MyAcceptedSocket : public Socket
   }
 };
 
+// The type of our listen socket: for each incoming connection a MyAcceptedSocket is spawned.
 class MyListenSocket : public ListenSocket<MyAcceptedSocket>
 {
  protected:
@@ -68,6 +71,9 @@ class MyListenSocket : public ListenSocket<MyAcceptedSocket>
   }
 };
 
+// The type of the socket that we use to connect to our own listen socket.
+// It detects that the 'connected()' signal is received even though we
+// never write anything to the socket.
 class MySocket : public Socket
 {
  private:
@@ -77,6 +83,8 @@ class MySocket : public Socket
   {
     Dout(dc::notice, "*** CONNECTED ***");
     m_connected = true;
+    // By immediately disconnecting again we cause a connection reset by peer on the otherside,
+    // which causes MyAcceptedSocket::read_returned_zero() to be called. See above.
     close();
   }
 
