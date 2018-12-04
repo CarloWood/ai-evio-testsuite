@@ -22,6 +22,10 @@ using evio::RefCountReleaser;
 using evio::SocketAddress;
 template<threadpool::Timer::time_point::rep count, typename Unit> using Interval = threadpool::Interval<count, Unit>;
 
+// This decoder is not really used because we don't send anything over the socket.
+// However, at least one of input (decoder) or output (stream) must be provided
+// for each socket, otherwise an assert happens (normally it makes little sense
+// to create a Socket that does no I/O out at all).
 class MyDecoder : public InputDecoder
 {
  private:
@@ -46,41 +50,32 @@ class MyAcceptedSocket : public Socket
     input(m_input);
     output(m_output);
   }
-
-  OutputStream& operator()() { return m_output; }
 };
 
 class MyListenSocket : public ListenSocket<MyAcceptedSocket>
 {
  protected:
-  void new_connection(accepted_socket_type& accepted_socket)
+  void new_connection(accepted_socket_type& UNUSED_ARG(accepted_socket))
   {
-    Dout(dc::notice, "New connection to listen socket was accepted. Sending 10 kb of data.");
-    // Write 10 kbyte of data.
-    for (int n = 0; n < 100; ++n)
-      accepted_socket() << "START012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789THEEND" << std::endl;
+    Dout(dc::notice, "New connection to listen socket was accepted.");
   }
 };
 
-class BurstSocket : public Socket
+class MySocket : public Socket
 {
-  private:
-   MyDecoder m_input;
-   OutputStream m_output;
+ private:
+  bool m_connected;
 
-  public:
-   BurstSocket()
-   {
-     input(m_input);
-     output(m_output);
-   }
+  void connected() override
+  {
+    Dout(dc::notice, "*** CONNECTED ***");
+    m_connected = true;
+    close();
+  }
 
-   void write_burst()
-   {
-     // The flush is necessary, it signals to evio that there is something
-     // in the buffer and starts the output device.
-     m_output << "Burst data!" << std::flush;
-   }
+ public:
+  MySocket() : m_connected(false) { }
+  ~MySocket() { ASSERT(m_connected); }
 };
 
 int main()
@@ -95,11 +90,11 @@ int main()
   // Initialize the IO event loop thread.
   EventLoopThread::instance().init(low_priority_handler);
 
-  static SocketAddress const listen_address("0.0.0.0:9001");
+  static SocketAddress const listen_address("0.0.0.0:9002");
 
   try
   {
-    // Start a listen socket on port 9001 that is closed after 10 seconds.
+    // Start a listen socket on port 9002 that is closed after 10 seconds.
     threadpool::Timer timer;
     {
       auto listen_sock = evio::create<MyListenSocket>();
@@ -116,20 +111,12 @@ int main()
     // Dumb way to wait until the listen socket is up.
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
+    MyDecoder decoder;
     {
-      // Connect 100 sockets to it.
-      std::array<boost::intrusive_ptr<BurstSocket>, 100> sockets;
-      for (size_t s = 0; s < sockets.size(); ++s)
-        sockets[s] = evio::create<BurstSocket>();
-      std::this_thread::sleep_for(std::chrono::milliseconds(400));
-      for (size_t s = 0; s < sockets.size(); ++s)
-        sockets[s]->connect(listen_address);
-      std::this_thread::sleep_for(std::chrono::milliseconds(400));
-      for (size_t s = 0; s < sockets.size(); ++s)
-        sockets[s]->write_burst();
-      std::this_thread::sleep_for(std::chrono::milliseconds(400));
-      for (size_t s = 0; s < sockets.size(); ++s)
-        sockets[s]->write_burst();
+      // Connect a socket to the listen socket.
+      auto socket = evio::create<MySocket>();
+      socket->input(decoder);
+      socket->connect(listen_address);
     }
 
     // Wait until all watchers have finished.
@@ -148,9 +135,5 @@ evio::RefCountReleaser MyDecoder::decode(MsgBlock msg)
   RefCountReleaser releaser;
   // Just print what was received.
   DoutEntering(dc::notice, "MyDecoder::decode(\"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
-  m_received += msg.get_size();
-  // Stop when the last message was received.
-  if (m_received == 10200)
-    releaser = stop_input_device();
   return releaser;
 }
