@@ -50,6 +50,13 @@ class MyAcceptedSocket : public Socket
     input(m_input);
     output(m_output);
   }
+
+ protected:
+  virtual RefCountReleaser read_returned_zero()
+  {
+    Dout(dc::notice, "*** DISCONNECTED ***");
+    return close_input_device();
+  }
 };
 
 class MyListenSocket : public ListenSocket<MyAcceptedSocket>
