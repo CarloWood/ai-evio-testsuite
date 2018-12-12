@@ -15,7 +15,7 @@ using namespace evio;
 class TestInputDevice : public InputDevice
 {
  public:
-  TestInputDevice() { }
+  TestInputDevice() : VT_ptr(this) { }
 
   void start()
   {
@@ -24,8 +24,26 @@ class TestInputDevice : public InputDevice
     start_input_device();
   }
 
+ public:
+  using VT_type = InputDevice::VT_type;
+
+  struct VT_impl : InputDevice::VT_impl
+  {
+    static void read_from_fd(InputDevice* self, int fd); // Read thread.
+
+    // Virtual table of TestInputDevice.
+    static constexpr VT_type VT{
+      read_from_fd,
+      read_returned_zero,
+      read_error,
+      data_received
+    };
+  };
+
+  utils::VTPtr<TestInputDevice, InputDevice> VT_ptr;
+
  protected:
-  void read_from_fd(int fd) override;   // Read thread.
+  void read_from_fd(int fd) { VT_ptr->_read_from_fd(this, fd); }
 };
 
 class TestOutputDevice : public OutputDevice
@@ -77,7 +95,7 @@ int main()
 }
 
 // Read thread.
-void TestInputDevice::read_from_fd(int fd)
+void TestInputDevice::VT_impl::read_from_fd(evio::InputDevice* _self, int fd)
 {
   DoutEntering(dc::notice, "TestInputDevice::read_from_fd(" << fd << ")");
 
@@ -85,15 +103,16 @@ void TestInputDevice::read_from_fd(int fd)
   ssize_t len;
   do
   {
-    len = read(fd, buf, 256);
+    len = ::read(fd, buf, 256);
     Dout(dc::notice, "Read: \"" << libcwd::buf2str(buf, len) << "\".");
   }
   while (len == 256);
 
   if (strncmp(buf, "quit\n", 5) == 0)
   {
+    TestInputDevice* self = static_cast<TestInputDevice*>(_self);
     ev_break(EV_A_ EVBREAK_ALL);        // Terminate EventLoopThread.
-    close();                            // Remove this object.
+    self->close();                      // Remove this object.
   }
 }
 

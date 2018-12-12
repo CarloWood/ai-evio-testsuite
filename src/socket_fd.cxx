@@ -30,12 +30,30 @@ class Socket : public evio::InputDevice, public evio::OutputDevice
   int m_request;
 
  public:
-  Socket() : m_request(0) { }
+  Socket() : m_request(0), VT_ptr(this) { }
 
   void connect_to_server(char const* remote_host, int remote_port);
 
+ public:
+  using VT_type = evio::InputDevice::VT_type;
+
+  struct VT_impl : evio::InputDevice::VT_impl
+  {
+    static void read_from_fd(evio::InputDevice* self, int fd); // Read thread.
+
+    // Virtual table of Socket.
+    static constexpr VT_type VT{
+      read_from_fd,
+      read_returned_zero,
+      read_error,
+      data_received
+    };
+  };
+
+  utils::VTPtr<Socket, evio::InputDevice> VT_ptr;
+
  protected:
-  void read_from_fd(int fd) override;   // Read thread.
+  void read_from_fd(int fd) { VT_ptr->_read_from_fd(this, fd); }
   void write_to_fd(int fd) override;    // Write thread.
 };
 
@@ -127,20 +145,21 @@ void Socket::connect_to_server(char const* remote_host, int remote_port)
 }
 
 // Read thread.
-void Socket::read_from_fd(int fd)
+void Socket::VT_impl::read_from_fd(evio::InputDevice* _self, int fd)
 {
   DoutEntering(dc::notice, "Socket::read_from_fd(" << fd << ")");
+  Socket* self = static_cast<Socket*>(_self);
   evio::RefCountReleaser releaser;
   char buf[256];
   ssize_t len;
   do
   {
     Dout(dc::system|continued_cf, "read(" << fd << ", char[256], 256) = ");
-    len = read(fd, buf, 256);
+    len = ::read(fd, buf, 256);
     Dout(dc::finish|cond_error_cf(len == -1), len);
     if (len == -1)
     {
-      releaser = evio::InputDevice::close();
+      releaser = self->evio::InputDevice::close();
       return;
     }
     Dout(dc::notice, "Read: \"" << libcwd::buf2str(buf, len) << "\".");
@@ -148,7 +167,7 @@ void Socket::read_from_fd(int fd)
   while (len == 256);
   if (strncmp(buf + len - 17, "#5</body></html>\n", 17) == 0)
   {
-    releaser += std::move(stop_input_device());
+    releaser += std::move(self->stop_input_device());
     ev_break(EV_A_ EVBREAK_ALL);
   }
 }
