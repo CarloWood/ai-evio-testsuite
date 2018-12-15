@@ -26,35 +26,35 @@
 
 class Socket : public evio::InputDevice, public evio::OutputDevice
 {
- private:
-  int m_request;
-
  public:
-  Socket() : m_request(0), VT_ptr(this) { }
-
-  void connect_to_server(char const* remote_host, int remote_port);
-
- public:
-  using VT_type = evio::InputDevice::VT_type;
-
-  struct VT_impl : evio::InputDevice::VT_impl
+  struct VT_type : InputDevice::VT_type, OutputDevice::VT_type
   {
-    static void read_from_fd(evio::InputDevice* self, int fd); // Read thread.
+  };
 
-    // Virtual table of Socket.
+  struct VT_impl : InputDevice::VT_impl, OutputDevice::VT_impl
+  {
+    static void read_from_fd(evio::InputDevice* _self, int fd); // Read thread.
+    static void write_to_fd(evio::OutputDevice* _self, int fd); // Write thread.
+
     static constexpr VT_type VT{
       read_from_fd,
       read_returned_zero,
       read_error,
-      data_received
+      data_received,
+      write_to_fd,
+      write_error
     };
   };
 
-  utils::VTPtr<Socket, evio::InputDevice> VT_ptr;
+  utils::VTPtr<Socket, InputDevice, OutputDevice> VT_ptr;
 
- protected:
-  void read_from_fd(int fd) { VT_ptr->_read_from_fd(this, fd); }
-  void write_to_fd(int fd) override;    // Write thread.
+ private:
+  int m_request;
+
+ public:
+  Socket() : VT_ptr(this), m_request(0) { }
+
+  void connect_to_server(char const* remote_host, int remote_port);
 };
 
 int main()
@@ -173,17 +173,18 @@ void Socket::VT_impl::read_from_fd(evio::InputDevice* _self, int fd)
 }
 
 // Write thread.
-void Socket::write_to_fd(int fd)
+void Socket::VT_impl::write_to_fd(evio::OutputDevice* _self, int fd)
 {
+  Socket* self = static_cast<Socket*>(_self);
   DoutEntering(dc::notice, "Socket::write_to_fd(" << fd << ")");
-  if (m_request < 6)
+  if (self->m_request < 6)
   {
     std::stringstream ss;
-    ss << "GET / HTTP/1.1\r\nHost: localhost:9001\r\nAccept: */*\r\nX-Request: " << m_request << "\r\nX-Sleep: " << (200 * m_request) << "\r\n\r\n";
-    ++m_request;
-    [[maybe_unused]] int unused = write(fd, ss.str().data(), ss.str().length());
+    ss << "GET / HTTP/1.1\r\nHost: localhost:9001\r\nAccept: */*\r\nX-Request: " << self->m_request << "\r\nX-Sleep: " << (200 * self->m_request) << "\r\n\r\n";
+    ++self->m_request;
+    [[maybe_unused]] int unused = ::write(fd, ss.str().data(), ss.str().length());
     Dout(dc::notice, "Wrote \"" << libcwd::buf2str(ss.str().data(), ss.str().length()) << "\".");
   }
   else
-    stop_output_device();
+    self->stop_output_device();
 }

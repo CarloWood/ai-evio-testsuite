@@ -49,7 +49,22 @@ class TestInputDevice : public InputDevice
 class TestOutputDevice : public OutputDevice
 {
  public:
-  TestOutputDevice() { }
+  using VT_type = OutputDevice::VT_type;
+
+  struct VT_impl : OutputDevice::VT_impl
+  {
+    static void write_to_fd(OutputDevice* self, int fd);
+
+    static constexpr VT_type VT{
+      write_to_fd,
+      write_error
+    };
+  };
+
+  utils::VTPtr<TestOutputDevice, OutputDevice> VT_ptr;
+
+ public:
+  TestOutputDevice() : VT_ptr(this) { }
 
   void start()
   {
@@ -57,9 +72,6 @@ class TestOutputDevice : public OutputDevice
     // Therefore it is not necessary to call output().
     start_output_device();
   }
-
- protected:
-  void write_to_fd(int fd) override;    // Write thread.
 };
 
 int main()
@@ -117,9 +129,10 @@ void TestInputDevice::VT_impl::read_from_fd(evio::InputDevice* _self, int fd)
 }
 
 // Write thread.
-void TestOutputDevice::write_to_fd(int fd)
+void TestOutputDevice::VT_impl::write_to_fd(OutputDevice* _self, int fd)
 {
+  TestOutputDevice* self = static_cast<TestOutputDevice*>(_self);
   DoutEntering(dc::notice, "TestOutputDevice::write_to_fd(" << fd << ")");
-  [[maybe_unused]] int unused = write(fd, "Hello World\n", 12);
-  stop_output_device();
+  [[maybe_unused]] int unused = ::write(fd, "Hello World\n", 12);
+  self->stop_output_device();
 }

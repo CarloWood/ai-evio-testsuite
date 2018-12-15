@@ -76,20 +76,40 @@ class MyListenSocket : public ListenSocket<MyAcceptedSocket>
 // never write anything to the socket.
 class MySocket : public Socket
 {
+ public:
+  using VT_type = Socket::VT_type;
+
+  struct VT_impl : Socket::VT_impl
+  {
+    // Override
+    static void connected(Socket* _self)
+    {
+      MySocket* self = static_cast<MySocket*>(_self);
+      Dout(dc::notice, "*** CONNECTED ***");
+      self->m_connected = true;
+      // By immediately disconnecting again we cause a connection reset by peer on the otherside,
+      // which causes MyAcceptedSocket::read_returned_zero() to be called. See above.
+      self->close();
+    }
+
+    static constexpr VT_type VT{
+      read_from_fd,
+      read_returned_zero,
+      read_error,
+      data_received,
+      write_to_fd,
+      write_error,
+      connected
+    };
+  };
+
+  utils::VTPtr<Socket, InputDevice, OutputDevice> VT_ptr;
+
  private:
   bool m_connected;
 
-  void connected() override
-  {
-    Dout(dc::notice, "*** CONNECTED ***");
-    m_connected = true;
-    // By immediately disconnecting again we cause a connection reset by peer on the otherside,
-    // which causes MyAcceptedSocket::read_returned_zero() to be called. See above.
-    close();
-  }
-
  public:
-  MySocket() : m_connected(false) { }
+  MySocket() : VT_ptr(this), m_connected(false) { }
   ~MySocket() { ASSERT(m_connected); }
 };
 
