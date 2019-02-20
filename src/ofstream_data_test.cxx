@@ -11,6 +11,8 @@
 
 #include "sys.h"
 #include "debug.h"
+#include "utils/AIAlert.h"
+#include "utils/debug_ostream_operators.h"
 #include "evio/EventLoopThread.h"
 #include "evio/PersistentInputFile.h"
 
@@ -26,6 +28,7 @@ int main()
   AIQueueHandle handler = thread_pool.new_queue(32);
   EventLoopThread::instance().init(handler);
 
+  try
   {
     boost::intrusive_ptr<PersistentInputFile> device2;
     {
@@ -70,8 +73,12 @@ int main()
     device2->close();             // This causes device2 to be closed and deleted (and therefore (soonish?) device3 to also be deleted).
     // Destruct device pointer device2 too (everything has already completed here though).
   }
+  catch (AIAlert::Error const& error)
+  {
+    Dout(dc::warning, error);
+  }
 
   // Finish active watchers and then return from main loop and join the thread.
-  EventLoopThread::terminate();
+  EventLoopThread::instance().terminate();
   Dout(dc::notice, "Leaving main()...");
 }

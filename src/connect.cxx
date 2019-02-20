@@ -35,7 +35,7 @@ class MyDecoder : public InputDecoder
   MyDecoder() : m_received(0) { }
 
  protected:
-  RefCountReleaser decode(MsgBlock msg) override;
+  RefCountReleaser decode(MsgBlock&& msg) override;
 };
 
 // This is the type of the accepted sockets when a new client connects to our listen socket.
@@ -82,10 +82,10 @@ class MySocket : public Socket
   struct VT_impl : Socket::VT_impl
   {
     // Override
-    static void connected(Socket* _self)
+    static void connected(Socket* _self, bool DEBUG_ONLY(success))
     {
       MySocket* self = static_cast<MySocket*>(_self);
-      Dout(dc::notice, "*** CONNECTED ***");
+      Dout(dc::notice, (success ? "*** CONNECTED ***" : "*** FAILED TO CONNECT ***"));
       self->m_connected = true;
       // By immediately disconnecting again we cause a connection reset by peer on the otherside,
       // which causes MyAcceptedSocket::read_returned_zero() to be called. See above.
@@ -93,15 +93,24 @@ class MySocket : public Socket
     }
 
     static constexpr VT_type VT{
-      read_from_fd,
-      read_returned_zero,
-      read_error,
-      data_received,
-      write_to_fd,
-      write_error,
-      connected
+      /*Socket*/
+        /*InputDevice*/
+        nullptr,
+        read_from_fd,
+        read_returned_zero,
+        read_error,
+        data_received,
+        /*OutputDevice*/
+        nullptr,
+        write_to_fd,
+        write_error,
+      connected,
+      disconnected
     };
   };
+
+  // Make a deep copy of VT_ptr.
+  VT_type* clone_VT() override { return VT_ptr.clone(this); }
 
   utils::VTPtr<Socket, InputDevice, OutputDevice> VT_ptr;
 
@@ -123,7 +132,7 @@ int main()
   AIQueueHandle low_priority_handler = thread_pool.new_queue(16);
 
   // Initialize the IO event loop thread.
-  EventLoopThread::instance().init(low_priority_handler);
+  evio::EventLoopThread::instance().init(low_priority_handler);
 
   static SocketAddress const listen_address("0.0.0.0:9002");
 
@@ -139,7 +148,7 @@ int main()
           {
             timer.release_callback();
             listen_sock->close();
-            EventLoopThread::instance().bump_terminate();
+            evio::EventLoopThread::instance().bump_terminate();
           });
     }
 
@@ -155,7 +164,7 @@ int main()
     }
 
     // Wait until all watchers have finished.
-    EventLoopThread::instance().terminate();
+    evio::EventLoopThread::instance().terminate();
   }
   catch (AIAlert::Error const& error)
   {
@@ -165,7 +174,7 @@ int main()
   Dout(dc::notice, "Leaving main...");
 }
 
-evio::RefCountReleaser MyDecoder::decode(MsgBlock msg)
+evio::RefCountReleaser MyDecoder::decode(MsgBlock&& msg)
 {
   RefCountReleaser releaser;
   // Just print what was received.

@@ -33,12 +33,17 @@ class TestInputDevice : public InputDevice
 
     // Virtual table of TestInputDevice.
     static constexpr VT_type VT{
+      /*InputDevice*/
+      nullptr,
       read_from_fd,
       read_returned_zero,
       read_error,
-      data_received
+      data_received,
     };
   };
+
+  // Make a deep copy of VT_ptr.
+  VT_type* clone_VT() override { return VT_ptr.clone(this); }
 
   utils::VTPtr<TestInputDevice, InputDevice> VT_ptr;
 
@@ -56,10 +61,15 @@ class TestOutputDevice : public OutputDevice
     static void write_to_fd(OutputDevice* self, int fd);
 
     static constexpr VT_type VT{
+      /*OutputDevice*/
+      nullptr,
       write_to_fd,
       write_error
     };
   };
+
+  // Make a deep copy of VT_ptr.
+  VT_type* clone_VT() override { return VT_ptr.clone(this); }
 
   utils::VTPtr<TestOutputDevice, OutputDevice> VT_ptr;
 
@@ -98,7 +108,7 @@ int main()
     fdp1->start();
 
     // Wait until all watchers have finished.
-    EventLoopThread::terminate();
+    EventLoopThread::instance().terminate();
   }
   catch (AIAlert::Error const& error)
   {

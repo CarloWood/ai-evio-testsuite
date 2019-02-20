@@ -23,7 +23,7 @@ using evio::SocketAddress;
 class InputPrinter : public InputDecoder
 {
  protected:
-  RefCountReleaser decode(MsgBlock msg) override;
+  RefCountReleaser decode(MsgBlock&& msg) override;
 };
 
 class MySocket : public Socket
@@ -47,7 +47,7 @@ int main()
   AIQueueHandle low_priority_handler = thread_pool.new_queue(16);
 
   // Initialize the IO event loop thread.
-  EventLoopThread::instance().init(low_priority_handler);
+  evio::EventLoopThread::instance().init(low_priority_handler);
 
   try
   {
@@ -97,10 +97,10 @@ int main()
   }
 
   // Wait until all watchers have finished.
-  EventLoopThread::instance().terminate();
+  evio::EventLoopThread::instance().terminate();
 }
 
-RefCountReleaser InputPrinter::decode(MsgBlock msg)
+RefCountReleaser InputPrinter::decode(MsgBlock&& msg)
 {
   RefCountReleaser releaser;
   // Just print what was received.

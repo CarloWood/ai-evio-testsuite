@@ -37,14 +37,21 @@ class Socket : public evio::InputDevice, public evio::OutputDevice
     static void write_to_fd(evio::OutputDevice* _self, int fd); // Write thread.
 
     static constexpr VT_type VT{
+      /*InputDevice*/
+      nullptr,
       read_from_fd,
       read_returned_zero,
       read_error,
       data_received,
+      /*OutputDevice*/
+      nullptr,
       write_to_fd,
       write_error
     };
   };
+
+  // Make a deep copy of VT_ptr.
+  VT_type* clone_VT() override { return VT_ptr.clone(this); }
 
   utils::VTPtr<Socket, InputDevice, OutputDevice> VT_ptr;
 
@@ -67,7 +74,7 @@ int main()
   AIQueueHandle low_priority_handler = thread_pool.new_queue(16);
 
   // Initialize the IO event loop thread.
-  EventLoopThread::instance().init(low_priority_handler);
+  evio::EventLoopThread::instance().init(low_priority_handler);
 
   try
   {
@@ -80,7 +87,7 @@ int main()
   }
 
   // Wait until all watchers have finished.
-  EventLoopThread::instance().terminate();
+  evio::EventLoopThread::instance().terminate();
 }
 
 void Socket::connect_to_server(char const* remote_host, int remote_port)

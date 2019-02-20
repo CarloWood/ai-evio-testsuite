@@ -31,7 +31,7 @@ class MyDecoder : public InputDecoder
   MyDecoder() : m_received(0) { }
 
  protected:
-  RefCountReleaser decode(MsgBlock msg) override;
+  RefCountReleaser decode(MsgBlock&& msg) override;
 };
 
 class MyAcceptedSocket : public Socket
@@ -93,7 +93,7 @@ int main()
   AIQueueHandle low_priority_handler = thread_pool.new_queue(16);
 
   // Initialize the IO event loop thread.
-  EventLoopThread::instance().init(low_priority_handler);
+  evio::EventLoopThread::instance().init(low_priority_handler);
 
   static SocketAddress const listen_address("0.0.0.0:9001");
 
@@ -109,7 +109,7 @@ int main()
           {
             timer.release_callback();
             listen_sock->close();
-            EventLoopThread::instance().bump_terminate();
+            evio::EventLoopThread::instance().bump_terminate();
           });
     }
 
@@ -133,7 +133,7 @@ int main()
     }
 
     // Wait until all watchers have finished.
-    EventLoopThread::instance().terminate();
+    evio::EventLoopThread::instance().terminate();
   }
   catch (AIAlert::Error const& error)
   {
@@ -143,7 +143,7 @@ int main()
   Dout(dc::notice, "Leaving main...");
 }
 
-evio::RefCountReleaser MyDecoder::decode(MsgBlock msg)
+evio::RefCountReleaser MyDecoder::decode(MsgBlock&& msg)
 {
   RefCountReleaser releaser;
   // Just print what was received.
