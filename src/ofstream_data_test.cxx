@@ -42,7 +42,7 @@ int main()
       // and link with an output file that writes to blah2.txt.
       device2 = create<PersistentInputFile>();
       auto device3 = create<File>();
-      device3->output(device2, 1024, 4096, 1000000);     // Read from device2; 'output' refers to the fact that we write output to the device3 (blah2.txt).
+      device3->output(device2, 1024, 4096, 1000000);     // Read from device2; 'output' refers to the fact that we write output to device3 (blah2.txt).
       device2->open("blah.txt", std::ios_base::in);
       device3->open("blah2.txt", std::ios_base::trunc);
 

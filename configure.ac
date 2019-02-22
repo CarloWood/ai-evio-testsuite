@@ -32,7 +32,7 @@ fi
 #CW_DOXYGEN([evio])
 
 # Output files.
-AC_CONFIG_FILES([src/Makefile])
+AC_CONFIG_FILES([src/Makefile tests/Makefile])
 
 # Include cwm4 footer.
 m4_include([cwm4/configure_ac_bottom.m4])

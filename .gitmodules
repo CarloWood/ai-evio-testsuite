@@ -9,7 +9,7 @@
 [submodule "evio"]
 	path = evio
 	url = https://github.com/CarloWood/evio.git
-	branch = decoder
+	branch = master
 [submodule "threadsafe"]
 	path = threadsafe
 	url = https://github.com/CarloWood/ai-threadsafe.git
@@ -22,3 +22,6 @@
 	path = threadpool
 	url = https://github.com/CarloWood/threadpool.git
 	branch = master
+[submodule "googletest"]
+	path = googletest
+	url = https://github.com/google/googletest.git

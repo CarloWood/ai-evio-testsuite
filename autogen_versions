@@ -1,5 +1,5 @@
-# aclocal 1.7.9 doesn't understand m4_include's. aclocal 1.8 doesn't print a version.
-required_automake_version="1.8.1"
+# googletest requires 1.9.
+required_automake_version="1.9"
 # autoconf 2.59 doesn't have AC_PROG_CC_C99.
 required_autoconf_version="2.60"
 # libtool 1.5.8 doesn't understand anything of the parameters being passed to it by the above versions.
