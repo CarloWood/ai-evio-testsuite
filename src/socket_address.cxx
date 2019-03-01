@@ -1,16 +1,9 @@
-#define BOOST_ASIO_HEADER_ONLY
 #include "sys.h"
 #include "debug.h"
 #include "evio/SocketAddress.h"
 #include "utils/AIAlert.h"
 #include "utils/debug_ostream_operators.h"
-#include <boost/asio/ip/address.hpp>
 #include <iostream>
-
-void f(boost::asio::ip::address addr)
-{
-  std::cout << "f(" << addr << ")\n";
-}
 
 int main()
 {
