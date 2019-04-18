@@ -156,7 +156,7 @@ void Socket::VT_impl::read_from_fd(evio::InputDevice* _self, int fd)
 {
   DoutEntering(dc::notice, "Socket::read_from_fd(" << fd << ")");
   Socket* self = static_cast<Socket*>(_self);
-  evio::RefCountReleaser releaser;
+  evio::RefCountReleaser need_allow_deletion;
   char buf[256];
   ssize_t len;
   do
@@ -166,7 +166,7 @@ void Socket::VT_impl::read_from_fd(evio::InputDevice* _self, int fd)
     Dout(dc::finish|cond_error_cf(len == -1), len);
     if (len == -1)
     {
-      releaser = self->evio::InputDevice::close();
+      need_allow_deletion = self->evio::InputDevice::close();
       return;
     }
     Dout(dc::notice, "Read: \"" << libcwd::buf2str(buf, len) << "\".");
@@ -174,7 +174,7 @@ void Socket::VT_impl::read_from_fd(evio::InputDevice* _self, int fd)
   while (len == 256);
   if (strncmp(buf + len - 17, "#5</body></html>\n", 17) == 0)
   {
-    releaser += std::move(self->stop_input_device());
+    need_allow_deletion += std::move(self->stop_input_device());
     ev_break(EV_A_ EVBREAK_ALL);
   }
 }

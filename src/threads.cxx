@@ -32,7 +32,7 @@ static void stdin_cb(EV_P_ ev_io* w, int UNUSED_ARG(revents))
   ev_break(EV_A_ EVBREAK_ALL);
 }
 
-struct MyDummyDevice : public evio::FileDescriptor
+struct MyDummyDevice : public virtual evio::FileDescriptor
 {
 };
 

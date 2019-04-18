@@ -145,12 +145,12 @@ int main()
 
 evio::RefCountReleaser MyDecoder::decode(MsgBlock&& msg)
 {
-  RefCountReleaser releaser;
+  RefCountReleaser need_allow_deletion;
   // Just print what was received.
   DoutEntering(dc::notice, "MyDecoder::decode(\"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
   m_received += msg.get_size();
   // Stop when the last message was received.
   if (m_received == 10200)
-    releaser = stop_input_device();
-  return releaser;
+    need_allow_deletion = stop_input_device();
+  return need_allow_deletion;
 }

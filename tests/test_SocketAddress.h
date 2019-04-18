@@ -169,14 +169,6 @@ std::array<InOut, 28> const sockaddr_data = {{
   { "[::ffff:0.01.255.00]:0", "[::ffff:0.1.255.0]:0", AF_INET6 },
 }};
 
-#if 0
-  { SocketAddress addr12(AF_INET6, "192.168.10.1", 42);
-    ASSERT(addr12.to_string() == "[::ffff:192.168.10.1]:42");
-
-    evio::SocketAddress addr13(AF_UNIX, "192.168.10.1");
-    ASSERT(addr13.to_string() == "192.168.10.1");
-#endif
-
 TEST(SocketAddress, StringViewConstruction) {
   for (auto&& test_case : sockaddr_data)
   {
@@ -281,4 +273,13 @@ TEST(SocketAddress, StringViewConstructionWithPort)
   evio::SocketAddress sa("1.2.3.4", 42);
   EXPECT_EQ(sa.to_string(), "1.2.3.4:42");
   EXPECT_AIALERT({ evio::SocketAddress sa("1.2.3.4:42", 42); }, "trailing characters after address");
+}
+
+TEST(SocketAddress, StringViewConstructionWithFamilyAndPort)
+{
+  evio::SocketAddress sa1(AF_INET, "192.168.10.1", 42);
+  EXPECT_EQ(sa1.to_string(), "192.168.10.1:42");
+
+  evio::SocketAddress sa2(AF_INET6, "192.168.10.1", 42);
+  EXPECT_EQ(sa2.to_string(), "[::ffff:192.168.10.1]:42");
 }

@@ -102,11 +102,11 @@ int main()
 
 RefCountReleaser InputPrinter::decode(MsgBlock&& msg)
 {
-  RefCountReleaser releaser;
+  RefCountReleaser need_allow_deletion;
   // Just print what was received.
   DoutEntering(dc::notice, "InputPrinter::decode(\"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
   // Stop when the last message was received.
   if (msg.get_size() >= 17 && strncmp(msg.get_start() + msg.get_size() - 17, "#5</body></html>\n", 17) == 0)
-    releaser = stop_input_device();
-  return releaser;
+    need_allow_deletion = stop_input_device();
+  return need_allow_deletion;
 }

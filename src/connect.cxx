@@ -176,8 +176,8 @@ int main()
 
 evio::RefCountReleaser MyDecoder::decode(MsgBlock&& msg)
 {
-  RefCountReleaser releaser;
+  RefCountReleaser need_allow_deletion;
   // Just print what was received.
   DoutEntering(dc::notice, "MyDecoder::decode(\"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
-  return releaser;
+  return need_allow_deletion;
 }
