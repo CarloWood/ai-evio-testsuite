@@ -19,11 +19,12 @@ using evio::RefCountReleaser;
 using evio::Socket;
 using evio::OutputStream;
 using evio::SocketAddress;
+using evio::GetThread;
 
 class InputPrinter : public InputDecoder
 {
  protected:
-  RefCountReleaser decode(MsgBlock&& msg) override;
+  RefCountReleaser decode(MsgBlock&& msg, GetThread) override;
 };
 
 class MySocket : public Socket
@@ -100,7 +101,7 @@ int main()
   evio::EventLoopThread::instance().terminate();
 }
 
-RefCountReleaser InputPrinter::decode(MsgBlock&& msg)
+RefCountReleaser InputPrinter::decode(MsgBlock&& msg, GetThread)
 {
   RefCountReleaser need_allow_deletion;
   // Just print what was received.

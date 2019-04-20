@@ -9,8 +9,9 @@
 #include "test_size_of_addr.h"
 #include "test_SocketAddress.h"
 #include "test_RefCountReleaser.h"
-#endif
 #include "test_FileDescriptor.h"
+#endif
+#include "test_IODevice.h"
 //#include "test_StreamBuf.h"
 
 using namespace boost::program_options;

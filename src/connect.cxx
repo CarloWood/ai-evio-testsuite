@@ -20,6 +20,7 @@ using evio::Socket;
 using evio::ListenSocket;
 using evio::RefCountReleaser;
 using evio::SocketAddress;
+using evio::GetThread;
 template<threadpool::Timer::time_point::rep count, typename Unit> using Interval = threadpool::Interval<count, Unit>;
 
 // This decoder is not really used because we don't send anything over the socket.
@@ -35,7 +36,7 @@ class MyDecoder : public InputDecoder
   MyDecoder() : m_received(0) { }
 
  protected:
-  RefCountReleaser decode(MsgBlock&& msg) override;
+  RefCountReleaser decode(MsgBlock&& msg, GetThread) override;
 };
 
 // This is the type of the accepted sockets when a new client connects to our listen socket.
@@ -174,7 +175,7 @@ int main()
   Dout(dc::notice, "Leaving main...");
 }
 
-evio::RefCountReleaser MyDecoder::decode(MsgBlock&& msg)
+evio::RefCountReleaser MyDecoder::decode(MsgBlock&& msg, GetThread)
 {
   RefCountReleaser need_allow_deletion;
   // Just print what was received.

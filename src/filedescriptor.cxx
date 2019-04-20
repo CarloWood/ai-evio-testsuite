@@ -17,11 +17,11 @@ class TestInputDevice : public InputDevice
  public:
   TestInputDevice() : VT_ptr(this) { }
 
-  void start()
+  void start(GetThread type)
   {
     // This object does not use a buffer, but instead overrides read_from_fd directly.
     // Therefore it is not necessary to call input().
-    start_input_device();
+    start_input_device(type);
   }
 
  public:
@@ -76,11 +76,11 @@ class TestOutputDevice : public OutputDevice
  public:
   TestOutputDevice() : VT_ptr(this) { }
 
-  void start()
+  void start(PutThread type)
   {
     // This object does not use a buffer, but instead overrides write_to_fd directly.
     // Therefore it is not necessary to call output().
-    start_output_device();
+    start_output_device(type);
   }
 };
 
@@ -104,8 +104,9 @@ int main()
     fdp0->init(0);        // Standard input.
     fdp1->init(1);        // Standard output.
 
-    fdp0->start();
-    fdp1->start();
+    evio::SingleThread type;
+    fdp0->start(type);
+    fdp1->start(type);
 
     // Wait until all watchers have finished.
     EventLoopThread::instance().terminate();

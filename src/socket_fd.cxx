@@ -145,10 +145,11 @@ void Socket::connect_to_server(char const* remote_host, int remote_port)
     Dout(dc::notice, "\"Connected\".");
 
   init(fd_remote);
+  evio::SingleThread type;
   // This class does not use input/output buffers but directly overrides read_from_fd and write_to_fd.
   // Therefore it is not necessary to call input() and output().
-  start_input_device();
-  start_output_device();
+  start_input_device(type);
+  start_output_device(type);
 }
 
 // Read thread.
