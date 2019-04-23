@@ -47,8 +47,11 @@ void MyInputBuffer::read(char* buf, size_t len)
   {
     size_t rlen = std::min(len, force_next_contiguous_number_of_bytes(type));       // Use force_next_contiguous_number_of_bytes() before writing to raw_gptr()!
     ASSERT(rlen > 0);
-    std::memcpy(buf, raw_gptr(), rlen);         // We read from the get area.
-    raw_gbump(rlen);
+    {
+      StreamBuf::GetThreadLock::wat get_area_wat(get_area_lock(type));
+      std::memcpy(buf, raw_gptr(get_area_wat), rlen);         // We read from the get area.
+      raw_gbump(get_area_wat, rlen);
+    }
     buf += rlen;
     len -= rlen;
   }

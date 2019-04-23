@@ -1,6 +1,10 @@
 #include "evio/InputDevice.h"
+#include "evio/SocketAddress.h"
+#include "evio/inet_support.h"
+#include "libcwd/buf2str.h"
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/socket.h>
 
 // Work around the fact that InputDevice and OutputDevice have a protected constructor and protected methods.
 
@@ -380,4 +384,140 @@ TEST_F(TestIODevice, StartDisableEnableStop) {
   EXPECT_TRUE(m_output_device->unique().is_momentary_false());
   m_input_device->close_input_device();
   m_output_device->close_output_device();
+}
+
+// A class to test InputDevice and OutputDevice.
+class TestSocket : public evio::InputDevice, public evio::OutputDevice
+{
+ public:
+  struct VT_type : evio::InputDevice::VT_type, evio::OutputDevice::VT_type
+  {
+  };
+
+  struct VT_impl : evio::InputDevice::VT_impl, evio::OutputDevice::VT_impl
+  {
+    static void read_from_fd(evio::InputDevice* _self, int fd)
+    {
+      DoutEntering(dc::notice, "TestSocket::read_from_fd(" << (void*)_self << ", " << fd << ")");
+      evio::InputDevice::VT_impl::read_from_fd(_self, fd);
+    }
+    static evio::RefCountReleaser read_returned_zero(evio::InputDevice* _self)
+    {
+      DoutEntering(dc::notice, "TestSocket::read_returned_zero(" << (void*)_self << ")");
+      return evio::InputDevice::VT_impl::read_returned_zero(_self);
+    }
+    static evio::RefCountReleaser read_error(evio::InputDevice* _self, int err)
+    {
+      DoutEntering(dc::notice, "TestSocket::read_error(" << (void*)_self << ", " << err << ")");
+      return evio::InputDevice::VT_impl::read_error(_self, err);
+    }
+    static evio::RefCountReleaser  data_received(evio::InputDevice* _self, char const* new_data, size_t rlen)
+    {
+      DoutEntering(dc::notice, "TestSocket::data_received(" << (void*)_self << ", \"" << libcwd::buf2str(new_data, rlen) << "\", " << rlen << ")");
+      return evio::InputDevice::VT_impl::data_received(_self, new_data, rlen);
+    }
+    static void write_to_fd(evio::OutputDevice* _self, int fd)
+    {
+      DoutEntering(dc::notice, "TestSocket::write_to_fd(" << (void*)_self << ", " << fd << ")");
+      OutputDevice::VT_impl::write_to_fd(_self, fd);
+    }
+    static void write_error(OutputDevice* _self, int err)
+    {
+      DoutEntering(dc::notice, "TestSocket::write_error(" << _self << ", " << err << ")");
+      OutputDevice::VT_impl::write_error(_self, err);
+    }
+
+    static constexpr VT_type VT{
+      /*TestSocket*/
+        /*InputDevice*/
+        nullptr,
+        read_from_fd,
+        read_returned_zero,
+        read_error,
+        data_received,
+        /*OutputDevice*/
+        nullptr,
+        write_to_fd,
+        write_error
+    };
+  };
+
+  // Make a deep copy of VT_ptr.
+  VT_type* clone_VT() override { return VT_ptr.clone(this); }
+
+  utils::VTPtr<TestSocket, evio::InputDevice, evio::OutputDevice> VT_ptr;
+
+ public:
+  TestSocket() : VT_ptr(this) { DoutEntering(dc::evio, "TestSocket::TestSocket() [" << this << "]"); }
+  ~TestSocket() { DoutEntering(dc::evio, "TestSocket::~TestSocket()"); }
+
+  void open()
+  {
+    DoutEntering(dc::notice, "TestSocket::open()");
+    int fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
+    FileDescriptor::init(fd);
+    evio::SingleThread type;
+    start_input_device(type);
+    start_output_device(type);
+    evio::SocketAddress sa("127.0.0.1:9001");
+    int res = connect(fd, sa, evio::size_of_addr(sa));
+    if (res == -1)
+      perror("connect");
+  }
+
+  void close()
+  {
+    DoutEntering(dc::notice, "TestSocket::close()");
+    FileDescriptor::close();
+  }
+};
+
+class TestInputDecoder : public evio::InputDecoder
+{
+ private:
+  size_t m_received;
+
+ public:
+  TestInputDecoder() : m_received(0) { }
+
+ protected:
+  evio::RefCountReleaser decode(evio::MsgBlock&& msg, evio::GetThread) override
+  {
+    // Just print what was received.
+    DoutEntering(dc::notice, "TestInputDecoder::decode(\"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
+    m_received += msg.get_size();
+    // Stop after receiving just one message.
+    return stop_input_device();
+  }
+};
+
+#include "fixture_echo_socket.h"
+
+TEST_F(EchoSocketFixture, VT)
+{
+  AIThreadPool thread_pool;
+  [[maybe_unused]] AIQueueHandle high_priority_handler = thread_pool.new_queue(32);
+  [[maybe_unused]] AIQueueHandle medium_priority_handler = thread_pool.new_queue(32);
+  AIQueueHandle low_priority_handler = thread_pool.new_queue(16);
+
+  // Initialize the IO event loop thread.
+  evio::EventLoopThread::instance().init(low_priority_handler);
+
+  TestInputDecoder decoder;
+  evio::OutputStream output;
+  {
+    auto io_device = evio::create<TestSocket>();
+
+    io_device->input(decoder);
+    io_device->output(output);
+    io_device->open();
+
+    output << generate_request(0, 200) << std::flush;
+
+    Dout(dc::notice|flush_cf, "Removing last boost::intrusive_ptr for " << io_device.get());
+  }
+  Dout(dc::notice|flush_cf, "Removed last boost::intrusive_ptr...");
+
+  // Wait until all watchers have finished.
+  evio::EventLoopThread::instance().terminate();
 }

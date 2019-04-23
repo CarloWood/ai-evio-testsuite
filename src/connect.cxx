@@ -26,7 +26,7 @@ template<threadpool::Timer::time_point::rep count, typename Unit> using Interval
 // This decoder is not really used because we don't send anything over the socket.
 // However, at least one of input(decoder) or output(stream) must be provided
 // for each socket, otherwise an assert happens (normally it makes little sense
-// to create a Socket that does no I/O out at all).
+// to create a Socket that does no I/O at all).
 class MyDecoder : public InputDecoder
 {
  private:
