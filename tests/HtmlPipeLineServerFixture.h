@@ -7,9 +7,12 @@
 #include <array>
 #include <deque>
 #include <string>
+#include <sstream>
 #include <boost/asio.hpp>
 #include <boost/enable_shared_from_this.hpp>
 #include <boost/bind.hpp>
+
+namespace test_html_server {
 
 using boost::asio::ip::tcp;
 
@@ -159,7 +162,6 @@ void Reply::set_sleeping(unsigned long sleep)
     wakeup();
   }
 }
-
 
 class tcp_connection : public boost::enable_shared_from_this<tcp_connection>
 {
@@ -419,21 +421,28 @@ class tcp_server
   int m_count;
 };
 
-class EchoSocketFixture : public testing::Test
+} // namespace test_html_server
+
+// Create a pipeline capable html server that listens on localhost:9001
+// and accepts requests as returned by generate_request(request, sleep).
+//
+// Replies to each HTML request is given after sleep milliseconds.
+
+class HtmlPipeLineServerFixture : public testing::Test
 {
  private:
   std::thread m_thread;
   boost::asio::io_service m_io_service;
-  tcp_server m_server;
+  test_html_server::tcp_server m_server;
 
  protected:
-  EchoSocketFixture() : m_server(m_io_service) { }
+  HtmlPipeLineServerFixture() : m_server(m_io_service) { }
 
   void SetUp()
   {
-    DoutEntering(dc::notice, "EchoSocketFixture::SetUp()");
+    DoutEntering(dc::notice, "HtmlPipeLineServerFixture::SetUp()");
     std::thread thr([this](){
-          Debug(debug::init_thread());
+          Debug(debug::init_thread(g_debug_output_on ? copy_from_main : debug_off));
           Dout(dc::notice, "Thread started.");
           m_io_service.reset();
           m_server.start();
@@ -446,7 +455,7 @@ class EchoSocketFixture : public testing::Test
 
   void TearDown()
   {
-    DoutEntering(dc::notice, "EchoSocketFixture::TearDown()");
+    DoutEntering(dc::notice, "HtmlPipeLineServerFixture::TearDown()");
     m_io_service.stop();
     m_server.stop();
     Dout(dc::notice, "Calling m_thread.join()");

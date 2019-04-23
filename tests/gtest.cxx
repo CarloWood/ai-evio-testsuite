@@ -17,6 +17,8 @@
 
 using namespace boost::program_options;
 
+bool g_debug_output_on;
+
 int main(int argc, char* argv[])
 {
   Debug(debug::init());
@@ -35,18 +37,22 @@ int main(int argc, char* argv[])
     store(parse_command_line(argc, argv, desc), vm);
     notify(vm);
 
-    Debug(libcw_do.off());
     if (vm.count("help"))
     {
       std::cout << desc << '\n';
       return 0;
     }
-    Debug(if (vm.count("debug-output")) libcw_do.on());
+    g_debug_output_on = vm.count("debug-output") > 0;
   }
   catch (error const& ex)
   {
     std::cerr << ex.what() << '\n';
   }
+
+  Debug(if (!g_debug_output_on)
+        libcw_do.off();
+        NAMESPACE_DEBUG::thread_init_default = libcwd::debug_off;
+      );
 
   return RUN_ALL_TESTS();
 }

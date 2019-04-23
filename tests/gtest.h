@@ -65,6 +65,8 @@ class GtestThrowListener : public testing::EmptyTestEventListener
 
 #include "debug.h"
 
+extern bool g_debug_output_on;
+
 class DebugDeathTest
 {
  private:
