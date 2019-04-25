@@ -50,8 +50,10 @@ int main(int argc, char* argv[])
   }
 
   Debug(if (!g_debug_output_on)
-        libcw_do.off();
-        NAMESPACE_DEBUG::thread_init_default = libcwd::debug_off;
+        {
+          libcw_do.off();
+          NAMESPACE_DEBUG::thread_init_default = libcwd::debug_off;
+        }
       );
 
   return RUN_ALL_TESTS();

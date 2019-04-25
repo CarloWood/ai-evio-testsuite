@@ -392,6 +392,10 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
  private:
   int m_write_to_fd_count;
   int m_read_from_fd_count;
+  int m_read_returned_zero_count;
+  int m_read_error_count;
+  int m_data_received_count;
+  int m_write_error_count;
 
  public:
   struct VT_type : evio::InputDevice::VT_type, evio::OutputDevice::VT_type
@@ -402,37 +406,45 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
   {
     static void read_from_fd(evio::InputDevice* _self, int fd)
     {
-      DoutEntering(dc::notice, "TestSocket::read_from_fd(" << (void*)_self << ", " << fd << ")");
+      DoutEntering(dc::notice|flush_cf, "TestSocket::read_from_fd(" << (void*)_self << ", " << fd << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_read_from_fd_count++;
+      Dout(dc::notice, "m_read_from_fd_count is now" << self->m_read_from_fd_count);
       evio::InputDevice::VT_impl::read_from_fd(_self, fd);
     }
     static evio::RefCountReleaser read_returned_zero(evio::InputDevice* _self)
     {
-      DoutEntering(dc::notice, "TestSocket::read_returned_zero(" << (void*)_self << ")");
+      DoutEntering(dc::notice|flush_cf, "TestSocket::read_returned_zero(" << (void*)_self << ")");
+      TestSocket* self = static_cast<TestSocket*>(_self);
+      self->m_read_returned_zero_count++;
       return evio::InputDevice::VT_impl::read_returned_zero(_self);
     }
     static evio::RefCountReleaser read_error(evio::InputDevice* _self, int err)
     {
-      DoutEntering(dc::notice, "TestSocket::read_error(" << (void*)_self << ", " << err << ")");
+      DoutEntering(dc::notice|flush_cf, "TestSocket::read_error(" << (void*)_self << ", " << err << ")");
+      TestSocket* self = static_cast<TestSocket*>(_self);
+      self->m_read_error_count++;
       return evio::InputDevice::VT_impl::read_error(_self, err);
     }
     static evio::RefCountReleaser data_received(evio::InputDevice* _self, char const* new_data, size_t rlen)
     {
-      DoutEntering(dc::notice, "TestSocket::data_received(" << (void*)_self << ", \"" << libcwd::buf2str(new_data, rlen) << "\", " << rlen << ")");
+      DoutEntering(dc::notice|flush_cf, "TestSocket::data_received(" << (void*)_self << ", \"" << libcwd::buf2str(new_data, rlen) << "\", " << rlen << ")");
+      TestSocket* self = static_cast<TestSocket*>(_self);
+      self->m_data_received_count++;
       return evio::InputDevice::VT_impl::data_received(_self, new_data, rlen);
     }
     static void write_to_fd(evio::OutputDevice* _self, int fd)
     {
-      DoutEntering(dc::notice, "TestSocket::write_to_fd(" << (void*)_self << ", " << fd << ")");
+      DoutEntering(dc::notice|flush_cf, "TestSocket::write_to_fd(" << (void*)_self << ", " << fd << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_write_to_fd_count++;
-      Dout(dc::notice, "m_write_to_fd_count is now " << self->m_write_to_fd_count);
       OutputDevice::VT_impl::write_to_fd(_self, fd);
     }
     static void write_error(OutputDevice* _self, int err)
     {
-      DoutEntering(dc::notice, "TestSocket::write_error(" << _self << ", " << err << ")");
+      DoutEntering(dc::notice|flush_cf, "TestSocket::write_error(" << _self << ", " << err << ")");
+      TestSocket* self = static_cast<TestSocket*>(_self);
+      self->m_write_error_count++;
       OutputDevice::VT_impl::write_error(_self, err);
     }
 
@@ -457,7 +469,10 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
   utils::VTPtr<TestSocket, evio::InputDevice, evio::OutputDevice> VT_ptr;
 
  public:
-  TestSocket() : m_write_to_fd_count(0), m_read_from_fd_count(0), VT_ptr(this) { DoutEntering(dc::evio, "TestSocket::TestSocket() [" << this << "]"); }
+  TestSocket() : m_write_to_fd_count(0), m_read_from_fd_count(0), m_read_returned_zero_count(0),
+                 m_read_error_count(0), m_data_received_count(0), m_write_error_count(0),
+                 VT_ptr(this) { DoutEntering(dc::evio, "TestSocket::TestSocket() [" << this << "]"); }
+
   ~TestSocket() { DoutEntering(dc::evio, "TestSocket::~TestSocket()"); }
 
   void open()
@@ -471,7 +486,7 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
     evio::SocketAddress sa("127.0.0.1:9001");
     int res = connect(fd, sa, evio::size_of_addr(sa));
     if (res == -1 && errno != EINPROGRESS)
-      perror("connect");
+      THROW_ALERTE("connect([FD], [SA], [SA_SIZE])", AIArgs("[FD]", fd)("[SA]", sa)("[SA_SIZE]", evio::size_of_addr(sa)));
   }
 
   void close()
@@ -482,6 +497,10 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
 
   int write_to_fd_count() const { return m_write_to_fd_count; }
   int read_from_fd_count() const { return m_read_from_fd_count; }
+  int read_returned_zero_count() const { return m_read_returned_zero_count; }
+  int read_error_count() const { return m_read_error_count; }
+  int data_received_count() const { return m_data_received_count; }
+  int write_error_count() const { return m_write_error_count; }
 };
 
 class TestInputDecoder : public evio::InputDecoder
@@ -513,7 +532,7 @@ TEST_F(HtmlPipeLineServerFixture, VT)
   AIQueueHandle low_priority_handler = thread_pool.new_queue(16);
 
   // Initialize the IO event loop thread.
-  evio::EventLoopThread::instance().init(low_priority_handler);
+  evio::EventLoop event_loop(low_priority_handler);
 
   TestInputDecoder decoder;
   evio::OutputStream output;
@@ -522,13 +541,13 @@ TEST_F(HtmlPipeLineServerFixture, VT)
 
     io_device->input(decoder);
     io_device->output(output);
-    io_device->open();                                                  // Because open() calls start_input_device()
+    CALL(io_device->open());                                            // Because open() calls start_input_device()...
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));        // during this sleep, TestSocket::write_to_fd is called once, sees EOF and calls stop_input_device.
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));        // ... during this sleep TestSocket::write_to_fd is called once, sees EOF and calls stop_input_device.
     EXPECT_EQ(io_device->write_to_fd_count(), 1);
 
-    output << generate_request(0, 200);                                 // This just writes to the buffer
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));        // and does not lead to another call to TestSocket::write_to_fd.
+    output << generate_request(0, 200);                                 // This just writes to the buffer...
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));        // ... and does not lead to another call to TestSocket::write_to_fd.
     EXPECT_EQ(io_device->write_to_fd_count(), 1);
     EXPECT_EQ(io_device->read_from_fd_count(), 0);
 
@@ -544,6 +563,5 @@ TEST_F(HtmlPipeLineServerFixture, VT)
   }
   Dout(dc::notice|flush_cf, "Removed last boost::intrusive_ptr...");
 
-  // Wait until all watchers have finished.
-  evio::EventLoopThread::instance().terminate();
+  event_loop.join();
 }

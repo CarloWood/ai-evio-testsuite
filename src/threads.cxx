@@ -46,7 +46,7 @@ int main()
   AIQueueHandle low_priority_handler = thread_pool.new_queue(16);
 
   // Create the IO event loop thread.
-  evio::EventLoopThread::instance().init(low_priority_handler);
+  evio::EventLoop event_loop(low_priority_handler);
 
   // Fill the threadpool queue.
   for (int i = 0; i < 1000; ++i)
@@ -88,6 +88,5 @@ int main()
   ev_io_init(&stdin_watcher, stdin_cb, /*STDIN_FILENO*/ 0, EV_READ);
   evio::EventLoopThread::instance().start(&stdin_watcher, &not_disabled);
 
-  // Wait until all watchers have finished.
-  evio::EventLoopThread::instance().terminate();
+  event_loop.join();
 }

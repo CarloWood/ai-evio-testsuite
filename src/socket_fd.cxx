@@ -73,21 +73,18 @@ int main()
   [[maybe_unused]] AIQueueHandle medium_priority_handler = thread_pool.new_queue(32);
   AIQueueHandle low_priority_handler = thread_pool.new_queue(16);
 
-  // Initialize the IO event loop thread.
-  evio::EventLoopThread::instance().init(low_priority_handler);
-
   try
   {
+    // Initialize the IO event loop thread.
+    evio::EventLoop event_loop(low_priority_handler);
     boost::intrusive_ptr<Socket> fdp0 = new Socket;
     fdp0->connect_to_server("localhost", 9001);
+    event_loop.join();
   }
   catch (AIAlert::Error const& error)
   {
     Dout(dc::warning, error);
   }
-
-  // Wait until all watchers have finished.
-  evio::EventLoopThread::instance().terminate();
 }
 
 void Socket::connect_to_server(char const* remote_host, int remote_port)

@@ -93,11 +93,10 @@ int main()
   [[maybe_unused]] AIQueueHandle medium_priority_handler = thread_pool.new_queue(32);
   AIQueueHandle low_priority_handler = thread_pool.new_queue(16);
 
-  // Create the IO event loop thread.
-  EventLoopThread::instance().init(low_priority_handler);
-
   try
   {
+    EventLoop event_loop(low_priority_handler);
+
     auto fdp0 = evio::create<TestInputDevice>();
     auto fdp1 = evio::create<TestOutputDevice>();
 
@@ -108,8 +107,7 @@ int main()
     fdp0->start(type);
     fdp1->start(type);
 
-    // Wait until all watchers have finished.
-    EventLoopThread::instance().terminate();
+    event_loop.join();
   }
   catch (AIAlert::Error const& error)
   {

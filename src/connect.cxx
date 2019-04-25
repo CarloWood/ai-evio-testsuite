@@ -132,13 +132,13 @@ int main()
   [[maybe_unused]] AIQueueHandle medium_priority_handler = thread_pool.new_queue(32);
   AIQueueHandle low_priority_handler = thread_pool.new_queue(16);
 
-  // Initialize the IO event loop thread.
-  evio::EventLoopThread::instance().init(low_priority_handler);
-
   static SocketAddress const listen_address("0.0.0.0:9002");
 
   try
   {
+    // Initialize the IO event loop thread.
+    evio::EventLoop event_loop(low_priority_handler);
+
     // Start a listen socket on port 9002 that is closed after 10 seconds.
     threadpool::Timer timer;
     {
@@ -164,8 +164,7 @@ int main()
       socket->connect(listen_address);
     }
 
-    // Wait until all watchers have finished.
-    evio::EventLoopThread::instance().terminate();
+    event_loop.join();
   }
   catch (AIAlert::Error const& error)
   {

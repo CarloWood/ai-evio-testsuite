@@ -442,7 +442,7 @@ class HtmlPipeLineServerFixture : public testing::Test
   {
     DoutEntering(dc::notice, "HtmlPipeLineServerFixture::SetUp()");
     std::thread thr([this](){
-          Debug(debug::init_thread(g_debug_output_on ? copy_from_main : debug_off));
+          Debug(debug::init_thread("HtmlServer"));
           Dout(dc::notice, "Thread started.");
           m_io_service.reset();
           m_server.start();

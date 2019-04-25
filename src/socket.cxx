@@ -48,7 +48,7 @@ int main()
   AIQueueHandle low_priority_handler = thread_pool.new_queue(16);
 
   // Initialize the IO event loop thread.
-  evio::EventLoopThread::instance().init(low_priority_handler);
+  evio::EventLoop event_loop(low_priority_handler);
 
   try
   {
@@ -97,8 +97,7 @@ int main()
     Dout(dc::warning, error);
   }
 
-  // Wait until all watchers have finished.
-  evio::EventLoopThread::instance().terminate();
+  event_loop.join();
 }
 
 RefCountReleaser InputPrinter::decode(MsgBlock&& msg, GetThread)

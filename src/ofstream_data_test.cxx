@@ -26,7 +26,7 @@ int main()
   AIThreadPool thread_pool;
   // Create the event loop thread and let it handle new events through the thread pool.
   AIQueueHandle handler = thread_pool.new_queue(32);
-  EventLoopThread::instance().init(handler);
+  EventLoop event_loop(handler);
 
   try
   {
@@ -78,7 +78,6 @@ int main()
     Dout(dc::warning, error);
   }
 
-  // Finish active watchers and then return from main loop and join the thread.
-  EventLoopThread::instance().terminate();
+  event_loop.join();
   Dout(dc::notice, "Leaving main()...");
 }

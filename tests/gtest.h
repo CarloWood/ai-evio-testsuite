@@ -63,6 +63,51 @@ class GtestThrowListener : public testing::EmptyTestEventListener
 #define CALL(subroutine) \
     do { SCOPED_TRACE("Called from here"); subroutine; } while(0)
 
+#define CW_GTEST_TEST_CLASS_NAME_(test_suite_name, test_name) \
+  cw_##test_suite_name##_##test_name##_Test
+
+#undef TEST_F
+#define TEST_F(test_fixture, test_name)\
+  class CW_GTEST_TEST_CLASS_NAME_(test_fixture, test_name)                    \
+      : public test_fixture {                                                 \
+   public:                                                                    \
+    CW_GTEST_TEST_CLASS_NAME_(test_fixture, test_name)() {}                   \
+                                                                              \
+   private:                                                                   \
+    virtual void TestBody();                                                  \
+    static ::testing::TestInfo* const test_info_ __attribute__ ((unused));    \
+    CW_GTEST_TEST_CLASS_NAME_(test_fixture, test_name)(                       \
+        CW_GTEST_TEST_CLASS_NAME_(test_fixture, test_name) const&) = delete;  \
+    void operator=(                                                           \
+        CW_GTEST_TEST_CLASS_NAME_(test_fixture, test_name) const&) = delete;  \
+    void CW_GTEST_TEST_NAME(test_fixture, test_name)();                       \
+  };                                                                          \
+                                                                              \
+  ::testing::TestInfo* const CW_GTEST_TEST_CLASS_NAME_(test_fixture,          \
+                                                    test_name)::test_info_ =  \
+      ::testing::internal::MakeAndRegisterTestInfo(                           \
+          #test_fixture, #test_name, nullptr, nullptr,                        \
+          ::testing::internal::CodeLocation(__FILE__, __LINE__),              \
+          (::testing::internal::GetTypeId<test_fixture>()),                   \
+          ::testing::internal::SuiteApiResolver<                              \
+              test_fixture>::GetSetUpCaseOrSuite(),                           \
+          ::testing::internal::SuiteApiResolver<                              \
+              test_fixture>::GetTearDownCaseOrSuite(),                        \
+          new ::testing::internal::TestFactoryImpl<CW_GTEST_TEST_CLASS_NAME_( \
+              test_fixture, test_name)>);                                     \
+  void CW_GTEST_TEST_CLASS_NAME_(test_fixture, test_name)::TestBody()         \
+  {                                                                           \
+    try                                                                       \
+    {                                                                         \
+      CW_GTEST_TEST_NAME(test_fixture, test_name)();                          \
+    }                                                                         \
+    catch (AIAlert::Error const& gtest_error)                                 \
+    {                                                                         \
+      FAIL() << "Unexpected exception of type `AIAlert::Error':\n" << gtest_error; \
+    }                                                                         \
+  }                                                                           \
+  void CW_GTEST_TEST_CLASS_NAME_(test_fixture, test_name)::CW_GTEST_TEST_NAME(test_fixture, test_name)()
+
 #include "debug.h"
 
 extern bool g_debug_output_on;
