@@ -390,6 +390,7 @@ TEST_F(TestIODevice, StartDisableEnableStop) {
 class TestSocket : public evio::InputDevice, public evio::OutputDevice
 {
  private:
+  int m_socket_fd;
   int m_write_to_fd_count;
   int m_read_from_fd_count;
   int m_read_returned_zero_count;
@@ -409,7 +410,6 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
       DoutEntering(dc::notice|flush_cf, "TestSocket::read_from_fd(" << (void*)_self << ", " << fd << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_read_from_fd_count++;
-      Dout(dc::notice, "m_read_from_fd_count is now" << self->m_read_from_fd_count);
       evio::InputDevice::VT_impl::read_from_fd(_self, fd);
     }
     static evio::RefCountReleaser read_returned_zero(evio::InputDevice* _self)
@@ -469,7 +469,7 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
   utils::VTPtr<TestSocket, evio::InputDevice, evio::OutputDevice> VT_ptr;
 
  public:
-  TestSocket() : m_write_to_fd_count(0), m_read_from_fd_count(0), m_read_returned_zero_count(0),
+  TestSocket() : m_socket_fd(-1), m_write_to_fd_count(0), m_read_from_fd_count(0), m_read_returned_zero_count(0),
                  m_read_error_count(0), m_data_received_count(0), m_write_error_count(0),
                  VT_ptr(this) { DoutEntering(dc::evio, "TestSocket::TestSocket() [" << this << "]"); }
 
@@ -478,21 +478,26 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
   void open()
   {
     DoutEntering(dc::notice, "TestSocket::open()");
-    int fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
-    FileDescriptor::init(fd);
+    m_socket_fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
+    FileDescriptor::init(m_socket_fd);
     evio::SingleThread type;
     start_input_device(type);
     start_output_device(type);
     evio::SocketAddress sa("127.0.0.1:9001");
-    int res = connect(fd, sa, evio::size_of_addr(sa));
+    int res = connect(m_socket_fd, sa, evio::size_of_addr(sa));
     if (res == -1 && errno != EINPROGRESS)
-      THROW_ALERTE("connect([FD], [SA], [SA_SIZE])", AIArgs("[FD]", fd)("[SA]", sa)("[SA_SIZE]", evio::size_of_addr(sa)));
+      THROW_ALERTE("connect([FD], [SA], [SA_SIZE])", AIArgs("[FD]", m_socket_fd)("[SA]", sa)("[SA_SIZE]", evio::size_of_addr(sa)));
   }
 
   void close()
   {
     DoutEntering(dc::notice, "TestSocket::close()");
     FileDescriptor::close();
+  }
+
+  void close_fd()
+  {
+    ::close(m_socket_fd);
   }
 
   int write_to_fd_count() const { return m_write_to_fd_count; }
@@ -507,9 +512,12 @@ class TestInputDecoder : public evio::InputDecoder
 {
  private:
   size_t m_received;
+  bool m_stop_after_one_message;
 
  public:
-  TestInputDecoder() : m_received(0) { }
+  TestInputDecoder() : m_received(0), m_stop_after_one_message(true) { }
+
+  void dont_stop() { m_stop_after_one_message = false; }
 
  protected:
   evio::RefCountReleaser decode(evio::MsgBlock&& msg, evio::GetThread) override
@@ -518,50 +526,156 @@ class TestInputDecoder : public evio::InputDecoder
     DoutEntering(dc::notice, "TestInputDecoder::decode(\"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
     m_received += msg.get_size();
     // Stop after receiving just one message.
-    return stop_input_device();
+    evio::RefCountReleaser allow_deletion;
+    if (m_stop_after_one_message)
+      allow_deletion = stop_input_device();
+    return allow_deletion;
   }
 };
 
 #include "HtmlPipeLineServerFixture.h"
 
-TEST_F(HtmlPipeLineServerFixture, VT)
+class EventLoopFixture : public HtmlPipeLineServerFixture
 {
-  AIThreadPool thread_pool;
-  [[maybe_unused]] AIQueueHandle high_priority_handler = thread_pool.new_queue(32);
-  [[maybe_unused]] AIQueueHandle medium_priority_handler = thread_pool.new_queue(32);
-  AIQueueHandle low_priority_handler = thread_pool.new_queue(16);
+ private:
+  AIThreadPool m_thread_pool;
+  evio::EventLoop* m_event_loop;
+  AIQueueHandle m_low_priority_handler;
 
-  // Initialize the IO event loop thread.
-  evio::EventLoop event_loop(low_priority_handler);
+ protected:
+  void SetUp()
+  {
+    DoutEntering(dc::notice, "EventLoopFixture::SetUp()");
+    HtmlPipeLineServerFixture::SetUp();
+    [[maybe_unused]] AIQueueHandle high_priority_handler = m_thread_pool.new_queue(32);
+    [[maybe_unused]] AIQueueHandle medium_priority_handler = m_thread_pool.new_queue(32);
+    m_low_priority_handler = m_thread_pool.new_queue(16);
+    m_event_loop = new evio::EventLoop(m_low_priority_handler);
+  }
 
+  void TearDown()
+  {
+    DoutEntering(dc::notice, "EventLoopFixture::SetUp()");
+    // Fake "leaving the scope" of AIThreadPool and EventLoop...
+    // Don't use this yourself.
+    // The correct way to do this is:
+    //
+    // {
+    //   AIThreadPool thread_pool;
+    //   AIQueueHandle handler = thread_pool.new_queue(32);     // For example.
+    //   EventLoop event_loop(handler);
+    //
+    //   ...your code here...
+    //
+    //   event_loop.join();
+    // }
+
+    m_event_loop->join();
+    delete m_event_loop;
+    m_low_priority_handler.set_to_undefined();
+    {
+      // Destruct the thread pool.
+      m_thread_pool.change_number_of_threads_to(0);
+      AIThreadPool dummy(std::move(m_thread_pool));
+    }
+    HtmlPipeLineServerFixture::TearDown();
+  }
+};
+
+class IODeviceFixture : public EventLoopFixture
+{
+ protected:
   TestInputDecoder decoder;
   evio::OutputStream output;
-  {
-    auto io_device = evio::create<TestSocket>();
+  boost::intrusive_ptr<TestSocket> io_device;
 
+ protected:
+  void SetUp()
+  {
+    EventLoopFixture::SetUp();
+    io_device = evio::create<TestSocket>();
     io_device->input(decoder);
     io_device->output(output);
     CALL(io_device->open());                                            // Because open() calls start_input_device()...
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));        // ... during this sleep TestSocket::write_to_fd is called once, sees EOF and calls stop_input_device.
-    EXPECT_EQ(io_device->write_to_fd_count(), 1);
-
-    output << generate_request(0, 200);                                 // This just writes to the buffer...
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));        // ... and does not lead to another call to TestSocket::write_to_fd.
-    EXPECT_EQ(io_device->write_to_fd_count(), 1);
-    EXPECT_EQ(io_device->read_from_fd_count(), 0);
-
-    output << std::flush;                                               // This writes to the buffer and calls start_input_device(),
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));          // so that TestSocket::write_to_fd is called again to write the buffer to the socket.
-    EXPECT_EQ(io_device->write_to_fd_count(), 2);
-    std::this_thread::sleep_for(std::chrono::milliseconds(199));        // That message is sent to the http server, which sends 200 ms later a message back that we receive again
-    EXPECT_EQ(io_device->read_from_fd_count(), 0);                      // but not yet...
-    std::this_thread::sleep_for(std::chrono::milliseconds(2));          // but now we should have...
-    EXPECT_EQ(io_device->read_from_fd_count(), 1);                      // causing a call to TestSocket::read_from_fd.
-
-    Dout(dc::notice|flush_cf, "Removing last boost::intrusive_ptr for " << io_device.get());
   }
-  Dout(dc::notice|flush_cf, "Removed last boost::intrusive_ptr...");
 
-  event_loop.join();
+  void TearDown()
+  {
+    Dout(dc::notice|flush_cf, "Removing last boost::intrusive_ptr for " << io_device.get());
+    io_device.reset();
+    Dout(dc::notice|flush_cf, "Removed last boost::intrusive_ptr...");
+    EventLoopFixture::TearDown();
+  }
+};
+
+TEST_F(IODeviceFixture, write_to_fd_read_from_fd)
+{
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));        // ... during this sleep TestSocket::write_to_fd is called once, sees EOF and calls stop_input_device.
+  EXPECT_EQ(io_device->write_to_fd_count(), 1);
+
+  output << generate_request(0, 200);                                 // This just writes to the buffer...
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));        // ... and does not lead to another call to TestSocket::write_to_fd.
+  EXPECT_EQ(io_device->write_to_fd_count(), 1);
+  EXPECT_EQ(io_device->read_from_fd_count(), 0);
+  EXPECT_EQ(io_device->read_returned_zero_count(), 0);
+
+  output << std::flush;                                               // This writes to the buffer and calls start_input_device(),
+  output << request_close(200);                                       // This is just written to the buffer again.
+  std::this_thread::sleep_for(std::chrono::milliseconds(1));          // so that TestSocket::write_to_fd is called again to write the buffer to the socket.
+  EXPECT_EQ(io_device->write_to_fd_count(), 2);
+  std::this_thread::sleep_for(std::chrono::milliseconds(199));        // That message is sent to the http server, which sends 200 ms later a message back that we receive again
+  EXPECT_EQ(io_device->read_from_fd_count(), 0);                      // but not yet...
+  std::this_thread::sleep_for(std::chrono::milliseconds(2));          // but now we should have...
+  EXPECT_EQ(io_device->read_from_fd_count(), 1);                      // causing a call to TestSocket::read_from_fd,
+  EXPECT_EQ(io_device->data_received_count(), 1);                     // which called data_received()
+  EXPECT_EQ(io_device->read_returned_zero_count(), 0);                // and not read_returned_zero().
+}
+
+TEST_F(IODeviceFixture, read_returned_zero)
+{
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));        // ... during this sleep TestSocket::write_to_fd is called once, sees EOF and calls stop_input_device.
+  EXPECT_EQ(io_device->write_to_fd_count(), 1);
+
+  output << request_close(200);                                       // This is just written to the buffer again.
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));        // ... and does not lead to another call to TestSocket::write_to_fd.
+  EXPECT_EQ(io_device->write_to_fd_count(), 1);
+  EXPECT_EQ(io_device->read_from_fd_count(), 0);
+  EXPECT_EQ(io_device->read_returned_zero_count(), 0);
+
+  output << std::flush;                                               // This writes to the buffer and calls start_input_device(),
+  std::this_thread::sleep_for(std::chrono::milliseconds(1));          // so that TestSocket::write_to_fd is called again to write the buffer to the socket.
+  EXPECT_EQ(io_device->write_to_fd_count(), 2);
+  std::this_thread::sleep_for(std::chrono::milliseconds(199));        // That message is sent to the http server, which closes the socket 200 ms later...
+  EXPECT_EQ(io_device->read_from_fd_count(), 0);                      // but not yet...
+  std::this_thread::sleep_for(std::chrono::milliseconds(2));          // but now we should have...
+  EXPECT_EQ(io_device->read_from_fd_count(), 1);                      // causing a call to TestSocket::read_from_fd,
+  EXPECT_EQ(io_device->read_returned_zero_count(), 1);                // which called read_returned_zero()
+  EXPECT_EQ(io_device->data_received_count(), 0);                     // and not data_received().
+}
+
+TEST_F(IODeviceFixture, request_with_close)
+{
+  decoder.dont_stop();                                                // Don't close the fd after reading one message.
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  output << generate_request_with_close(1, 10) << std::flush;         // Server will wait 10 ms then write one message and immediately close the fd.
+  std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  EXPECT_EQ(io_device->write_to_fd_count(), 2);                       // Same as above tests.
+  EXPECT_EQ(io_device->read_from_fd_count(), 2);                      // One for the message and one for the close.
+  EXPECT_EQ(io_device->data_received_count(), 1);                     // One for the message.
+  EXPECT_EQ(io_device->read_returned_zero_count(), 1);                // One for the close.
+}
+
+TEST_F(IODeviceFixture, read_error_write_error)
+{
+  decoder.dont_stop();                                                // Don't close the fd after reading one message.
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  output << generate_request_with_close(1, 10) << std::flush;         // Server will wait 10 ms then write one message and immediately close the fd.
+  io_device->close_fd();
+  std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  EXPECT_EQ(io_device->write_to_fd_count(), 2);                       // Same as above tests.
+  EXPECT_EQ(io_device->read_from_fd_count(), 1);                      // One for the close.
+  EXPECT_EQ(io_device->data_received_count(), 0);                     // No message received.
+  EXPECT_EQ(io_device->read_returned_zero_count(), 0);                // No remote close.
+  EXPECT_EQ(io_device->read_error_count(), 1);                        // We were woken up, but trying to read caused a EBADF error.
+  EXPECT_EQ(io_device->write_error_count(), 1);                       // The attempt to write the message failed with a EBADF error.
 }

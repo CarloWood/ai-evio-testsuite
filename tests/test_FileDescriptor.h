@@ -120,11 +120,12 @@ class TestInputDevice : public evio::InputDevice, public FileDescriptor
     auto device = evio::create<TestInputDevice>();
     int fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
     device->init(fd);
+    evio::SingleThread type;
     if (dont_close)
       device->set_dont_close();
     device->tell_testsuite_input_fd(fd);
     if (start_it)
-      device->start_input_device();
+      device->start_input_device(type);
     return device;
   }
 
@@ -163,6 +164,7 @@ class TestOutputDevice : public evio::OutputDevice, public FileDescriptor
     auto device = evio::create<TestOutputDevice>();
     int fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
     device->init(fd);
+    evio::SingleThread type;
     if (dont_close)
       device->set_dont_close();
     int val = fcntl(fd, F_GETFL);
@@ -170,7 +172,7 @@ class TestOutputDevice : public evio::OutputDevice, public FileDescriptor
     EXPECT_TRUE(!!(val & O_NONBLOCK));  // Should be set to non-blocking after call to init().
     device->tell_testsuite_output_fd(fd);
     if (start_it)
-      device->start_output_device();
+      device->start_output_device(type);
     return device;
   }
 
@@ -652,16 +654,16 @@ void DisableInputDevice<started, close>::test_body()
 void TestInputDevice::test_disable_input_device(bool started, bool close)
 {
   evio::SingleThread type;
-  EXPECT_EQ(is_active(type).is_true(), started);
+  EXPECT_EQ(is_active(type).is_transitory_true(), started);
   disable_input_device();
   EXPECT_TRUE(is_disabled());
   EXPECT_TRUE(is_active(type).is_false());
   if (close)
     close_input_device();
-  enable_input_device();
+  enable_input_device(type);
   EXPECT_FALSE(is_disabled());
-  EXPECT_EQ(is_active(type).is_true(), !close);         // Even when not started before, enable_input_device() will start
-                                                        // an input device with a valid fd (because data might be readable).
+  EXPECT_EQ(is_active(type).is_transitory_true(), !close);      // Even when not started before, enable_input_device() will start
+                                                                // an input device with a valid fd (because data might be readable).
   // While a device is active it will not be deleted.
   // In order to let TestDestruction::TearDown() not fail, call stop_input_device() here.
   // This is also allowed when the device is already stopped.
@@ -690,17 +692,17 @@ void DisableOutputDevice<started, close>::test_body()
 void TestOutputDevice::test_disable_output_device(bool started, bool close)
 {
   evio::SingleThread type;
-  EXPECT_EQ(is_active(type).is_true(), started);
+  EXPECT_EQ(is_active(type).is_transitory_true(), started);
   disable_output_device();
   EXPECT_TRUE(is_disabled());
   EXPECT_TRUE(is_active(type).is_false());
   if (close)
     close_output_device();
-  enable_output_device();
+  enable_output_device(type);
   EXPECT_FALSE(is_disabled());
   // Currently, calling enable_output_device() always calls start_output_device(),
   // even when there is nothing to write.
-  EXPECT_EQ(is_active(type).is_true(), !close);
+  EXPECT_EQ(is_active(type).is_transitory_true(), !close);
   // While a device is active it will not be deleted.
   // In order to let TestDestruction::TearDown() not fail, call stop_output_device() here.
   // This is also allowed when the device is already stopped.

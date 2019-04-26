@@ -3,15 +3,12 @@
 #include "debug.h"
 #include <boost/program_options.hpp>
 
-#if 0
 #include "test_set_XXXsockbuf.h"
 #include "test_print_hostent_on.h"
 #include "test_size_of_addr.h"
 #include "test_SocketAddress.h"
 #include "test_RefCountReleaser.h"
 #include "test_FileDescriptor.h"
-#endif
-
 #include "test_IODevice.h"
 //#include "test_StreamBuf.h"
 
