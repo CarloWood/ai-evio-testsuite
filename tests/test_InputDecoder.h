@@ -15,10 +15,6 @@ TEST(InputDecoder, default_input_blocksize_c) {
 
 class MyInputDevice : public evio::InputDevice
 {
- protected:
-  void start_input_device(evio::GetThread) { Dout(dc::notice, "Calling MyInputDevice::start_input_device()"); }
-  evio::RefCountReleaser stop_input_device() { Dout(dc::notice, "Calling MyInputDevice::stop_input_device()"); return {}; }
-
  public:
   evio::InputBuffer* get_ibuffer() const { return m_ibuffer; }
 };
