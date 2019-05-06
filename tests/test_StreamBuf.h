@@ -379,4 +379,9 @@ TEST_F(InputBufferFixture, ReadData)
   // Next write a block size of data.
   std::string test_string2(m_min_block_size, '*');
   m_buffer->sputn(test_string2.data(), test_string2.size());
+
+  // This should perfectly fit in the first block, because the block was empty after reading it back,
+  // which should have reset the put area to the beginning of the block at the moment we started
+  // writing again.
+  EXPECT_FALSE(m_buffer->has_multiple_blocks(get_type, put_type));
 }
