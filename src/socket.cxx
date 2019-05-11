@@ -36,7 +36,9 @@ class MySocket : public Socket
   MySocket() { input(m_input_printer); }
 };
 
+#ifdef CWDEBUG
 using debug::Mark;
+#endif
 
 int main()
 {
@@ -55,26 +57,36 @@ int main()
     constexpr int number_of_sockets = 4;
     boost::intrusive_ptr<MySocket> socket[number_of_sockets];
     Dout(dc::notice, "Creating OutputStream objects.");
+#ifdef CWDEBUG
     Mark m1;
+#endif
     OutputStream output_stream[number_of_sockets];
+#ifdef CWDEBUG
     m1.end();
+#endif
     for (int i = 0; i < number_of_sockets; ++i)
     {
       {
         Dout(dc::notice, "Creating MySocket object #" << i);
+#ifdef CWDEBUG
         Mark m2;
+#endif
         socket[i] = new MySocket;
       }
       {
         Dout(dc::notice, "Linking OutputStream #" << i << " to socket #" << i);
+#ifdef CWDEBUG
         Mark m3;
+#endif
         socket[i]->output(output_stream[i]);
       }
     }
     for (int i = 0; i < number_of_sockets; ++i)
     {
       Dout(dc::notice, "Calling socket[" << i << "]->connect()");
+#ifdef CWDEBUG
       Mark m4;
+#endif
       socket[i]->connect(SocketAddress("127.0.0.1", 9001));
     }
 
@@ -83,7 +95,9 @@ int main()
       for (int i = 0; i < number_of_sockets; ++i)
       {
         Dout(dc::notice, "Writing data to output_stream[" << i << "]");
+#ifdef CWDEBUG
         Mark m5;
+#endif
         output_stream[i] << "GET / HTTP/1.1\r\n"
                             "Host: localhost:9001\r\n"
                             "Accept: */*\r\n"

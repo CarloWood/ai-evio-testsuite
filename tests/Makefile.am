@@ -4,7 +4,7 @@ check_LTLIBRARIES = libgtest.la
 check_PROGRAMS = gtest
 
 # Do not use -Wundef because googletest gives loads of warnings in that case.
-CXXFLAGS = -std=c++17 -g -Wall -Woverloaded-virtual -Wpointer-arith -Wwrite-strings -Winline
+CXXFLAGS = -std=c++17 -g -O2 -Wall -Woverloaded-virtual -Wpointer-arith -Wwrite-strings -Winline
 
 libgtest_la_SOURCES = ../googletest/googletest/src/gtest-all.cc
 libgtest_la_CXXFLAGS = -I$(top_srcdir)/googletest/googletest/include -I$(top_srcdir)/googletest/googletest -pthread

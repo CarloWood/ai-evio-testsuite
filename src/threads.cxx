@@ -62,9 +62,9 @@ int main()
         int len = queue_access.length();
         if (!(queue_full = len == queue.capacity()))
         {
-          int qc = ++queue_counter;
+          CWDEBUG_ONLY(int qc =) ++queue_counter;
           Dout(dc::notice, "Adding #" << qc << " to the queue with length " << len);
-          queue_access.move_in([qc, len](){
+          queue_access.move_in([CWDEBUG_ONLY(qc)](){
               Dout(dc::notice|flush_cf, "Thread pool worker executing entry #" << qc << " (sleeping 1 second).");
               std::this_thread::sleep_for(std::chrono::seconds(1));
               return false; });

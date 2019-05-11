@@ -30,10 +30,12 @@ template<threadpool::Timer::time_point::rep count, typename Unit> using Interval
 class MyDecoder : public InputDecoder
 {
  private:
+#ifdef CWDEBUG
   size_t m_received;
+#endif
 
  public:
-  MyDecoder() : m_received(0) { }
+  MyDecoder() CWDEBUG_ONLY(: m_received(0)) { }
 
  protected:
   RefCountReleaser decode(MsgBlock&& msg, GetThread) override;
@@ -83,7 +85,7 @@ class MySocket : public Socket
   struct VT_impl : Socket::VT_impl
   {
     // Override
-    static void connected(Socket* _self, bool DEBUG_ONLY(success))
+    static void connected(Socket* _self, bool CWDEBUG_ONLY(success))
     {
       MySocket* self = static_cast<MySocket*>(_self);
       Dout(dc::notice, (success ? "*** CONNECTED ***" : "*** FAILED TO CONNECT ***"));
@@ -96,15 +98,15 @@ class MySocket : public Socket
     static constexpr VT_type VT{
       /*Socket*/
         /*InputDevice*/
-        nullptr,
+      { nullptr,
         read_from_fd,
         read_returned_zero,
         read_error,
-        data_received,
+        data_received },
         /*OutputDevice*/
-        nullptr,
+      { nullptr,
         write_to_fd,
-        write_error,
+        write_error },
       connected,
       disconnected
     };
@@ -174,10 +176,11 @@ int main()
   Dout(dc::notice, "Leaving main...");
 }
 
-evio::RefCountReleaser MyDecoder::decode(MsgBlock&& msg, GetThread)
+evio::RefCountReleaser MyDecoder::decode(MsgBlock&& CWDEBUG_ONLY(msg), GetThread)
 {
   RefCountReleaser need_allow_deletion;
   // Just print what was received.
   DoutEntering(dc::notice, "MyDecoder::decode(\"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
+  Debug(m_received += msg.get_size());
   return need_allow_deletion;
 }

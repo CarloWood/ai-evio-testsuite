@@ -112,6 +112,7 @@ class GtestThrowListener : public testing::EmptyTestEventListener
 
 extern bool g_debug_output_on;
 
+#ifdef CWDEBUG
 class DebugDeathTest
 {
  private:
@@ -128,12 +129,13 @@ class DebugDeathTest
     libcwd::libcw_do.set_ostream(m_old_device);
   }
 };
+#endif
 
 #undef EXPECT_DEATH
 #define EXPECT_DEATH(statement, regex) \
     do \
     { \
-      DebugDeathTest __dummy; \
+      CWDEBUG_ONLY(DebugDeathTest __dummy;) \
       EXPECT_EXIT(statement, ::testing::internal::ExitedUnsuccessfully, regex); \
     } \
     while(0)

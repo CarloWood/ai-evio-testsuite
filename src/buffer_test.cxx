@@ -186,7 +186,9 @@ int main()
     MyOutputBuffer* sb = new MyOutputBuffer(nullptr, minimum_blocksize, max_alloc, buffer_full_watermark);
 
     evio::GetThread get_thread;
+#if CW_DEBUG
     evio::PutThread put_thread;
+#endif
 
     Dout(dc::notice, "m_minimum_block_size = " << sb->m_minimum_block_size);
     Dout(dc::notice, "has_multiple_blocks() = " << sb->has_multiple_blocks(get_thread, put_thread));
@@ -204,6 +206,7 @@ int main()
     // new_block_size is private because it calls get_data_size_upper_bound() which is fuzzy.
     //Dout(dc::notice, "new_block_size() = " << sb->new_block_size(put_thread));
 //    Dout(dc::notice, "buffer_full() = " << (sb->buffer_full() ? "true" : "false"));
+#ifdef CWDEBUG
     bool is_empty;
     {
       evio::StreamBuf::GetThreadLock::rat get_area_rat(sb->get_area_lock(get_thread));
@@ -214,6 +217,7 @@ int main()
 
     Dout(dc::notice, "Empty buffer:");
     ASSERT(is_empty);
+#endif
     Debug(sb->printOn(std::cout));
 
 //    ASSERT(!sb->buffer_full());

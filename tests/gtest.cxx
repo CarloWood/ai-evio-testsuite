@@ -56,6 +56,7 @@ int main(int argc, char* argv[])
           NAMESPACE_DEBUG::thread_init_default = libcwd::debug_off;
         }
       );
+  Dout(dc::notice, "Debug output is turned on.");
 
   return RUN_ALL_TESTS();
 }

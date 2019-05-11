@@ -1,6 +1,10 @@
 #include "evio/InputDecoder.h"
 #include "evio/StreamBuf.h"
+#include "utils/RandomStream.h"
+#include "utils/StreamHasher.h"
+#ifdef CWDEBUG
 #include <libcwd/buf2str.h>
+#endif
 
 TEST(StreamBuf, TypeDefs) {
 
@@ -202,10 +206,11 @@ TEST_F(OutputBufferFixture, WriteData)
   // Still 2...
   CALL(test_size(2));
 
-  // After calling sync_next_egptr directly...
+  // After calling update_get_area directly...
   {
-    evio::StreamBuf::GetThreadLock::wat get_area_wat(m_buffer->get_area_lock(get_type));
-    m_buffer->sync_next_egptr(m_buffer->get_get_area_block_node(get_type), get_area_wat);
+    char* cur_gptr;
+    std::streamsize available;
+    m_buffer->update_get_area(m_buffer->get_get_area_block_node(get_type), cur_gptr, available, evio::StreamBuf::GetThreadLock::wat(m_buffer->get_area_lock(get_type)));
   }
   // The get area is updated.
   EXPECT_EQ(m_buffer->buf2dev_contiguous(), 2UL);
@@ -216,8 +221,9 @@ TEST_F(OutputBufferFixture, WriteData)
   EXPECT_EQ(link_buffer->dev2buf_contiguous(), m_min_block_size - 3);
   EXPECT_EQ(m_buffer->buf2dev_contiguous(), 2UL);
   {
-    evio::StreamBuf::GetThreadLock::wat get_area_wat(m_buffer->get_area_lock(get_type));
-    m_buffer->sync_next_egptr(m_buffer->get_get_area_block_node(get_type), get_area_wat);
+    char* cur_gptr;
+    std::streamsize available;
+    m_buffer->update_get_area(m_buffer->get_get_area_block_node(get_type), cur_gptr, available, evio::StreamBuf::GetThreadLock::wat(m_buffer->get_area_lock(get_type)));
   }
   EXPECT_EQ(m_buffer->buf2dev_contiguous(), 3UL);
 
@@ -236,8 +242,9 @@ TEST_F(OutputBufferFixture, WriteData)
   // reasons).
   EXPECT_EQ(m_buffer->buf2dev_contiguous(), 3UL);
   {
-    evio::StreamBuf::GetThreadLock::wat get_area_wat(m_buffer->get_area_lock(get_type));
-    m_buffer->sync_next_egptr(m_buffer->get_get_area_block_node(get_type), get_area_wat);
+    char* cur_gptr;
+    std::streamsize available;
+    m_buffer->update_get_area(m_buffer->get_get_area_block_node(get_type), cur_gptr, available, evio::StreamBuf::GetThreadLock::wat(m_buffer->get_area_lock(get_type)));
   }
   EXPECT_EQ(m_buffer->buf2dev_contiguous(), 6UL);
 
@@ -250,8 +257,9 @@ TEST_F(OutputBufferFixture, WriteData)
 
   EXPECT_EQ(m_buffer->buf2dev_contiguous(), 6UL);
   {
-    evio::StreamBuf::GetThreadLock::wat get_area_wat(m_buffer->get_area_lock(get_type));
-    m_buffer->sync_next_egptr(m_buffer->get_get_area_block_node(get_type), get_area_wat);
+    char* cur_gptr;
+    std::streamsize available;
+    m_buffer->update_get_area(m_buffer->get_get_area_block_node(get_type), cur_gptr, available, evio::StreamBuf::GetThreadLock::wat(m_buffer->get_area_lock(get_type)));
   }
   EXPECT_EQ(m_buffer->buf2dev_contiguous(), 9UL);
 
@@ -271,8 +279,9 @@ TEST_F(OutputBufferFixture, WriteData)
   // And the get area still wasn't updated.
   EXPECT_EQ(m_buffer->buf2dev_contiguous(), 9UL);
   {
-    evio::StreamBuf::GetThreadLock::wat get_area_wat(m_buffer->get_area_lock(get_type));
-    m_buffer->sync_next_egptr(m_buffer->get_get_area_block_node(get_type), get_area_wat);
+    char* cur_gptr;
+    std::streamsize available;
+    m_buffer->update_get_area(m_buffer->get_get_area_block_node(get_type), cur_gptr, available, evio::StreamBuf::GetThreadLock::wat(m_buffer->get_area_lock(get_type)));
   }
   // Available to read is now the whole first block, but not that extra byte of course.
   EXPECT_EQ(m_buffer->buf2dev_contiguous(), m_min_block_size);
@@ -377,11 +386,134 @@ TEST_F(InputBufferFixture, ReadData)
   EXPECT_EQ(read_back_buffer, test_string);
 
   // Next write a block size of data.
-  std::string test_string2(m_min_block_size, '*');
+  std::string test_string2 = std::string("abcdefghijklmnopqrstuvwxyz012345").substr(0, m_min_block_size - 1);
+  if (m_min_block_size - 1 > test_string2.size())
+    test_string2 += std::string(m_min_block_size - 1 - test_string2.size(), '*');
+  test_string2 += '!';
   m_buffer->sputn(test_string2.data(), test_string2.size());
 
   // This should perfectly fit in the first block, because the block was empty after reading it back,
   // which should have reset the put area to the beginning of the block at the moment we started
   // writing again.
   EXPECT_FALSE(m_buffer->has_multiple_blocks(get_type, put_type));
+
+  // Read everything character by character.
+  std::string s;
+  for (unsigned int i = 0; i < m_min_block_size; ++i)
+    s += m_buffer->sbumpc();
+  EXPECT_EQ(s, test_string2.c_str());
+
+  // The buffer is now entirely empty.
+  {
+    evio::StreamBuf::GetThreadLock::crat get_area_rat(m_buffer->get_area_lock(get_type));
+    evio::StreamBuf::PutThreadLock::crat put_area_rat(m_buffer->put_area_lock(put_type));
+    EXPECT_TRUE(m_buffer->buffer_empty(get_area_rat, put_area_rat));
+    EXPECT_EQ(m_buffer->unused_in_first_block(get_area_rat), m_min_block_size);
+    EXPECT_EQ(m_buffer->unused_in_last_block(put_area_rat), 0UL);
+  }
+  EXPECT_FALSE(m_buffer->has_multiple_blocks(get_type, put_type));
+
+  // But when we write to it - we DO end up with a new memory block, because last_gptr was not updated.
+  EXPECT_EQ(m_buffer->sputn(".", 1), 1);
+  EXPECT_TRUE(m_buffer->has_multiple_blocks(get_type, put_type));
+}
+
+class AInputStream : public std::istream
+{
+};
+
+class AOutputStream : public std::ostream
+{
+};
+
+class LinkBufferFixture : public testing::Test
+{
+ protected:
+  boost::intrusive_ptr<MyInputDevice> m_input_device;
+  boost::intrusive_ptr<MyOutputDevice> m_output_device;
+  evio::LinkBuffer* m_buffer;
+  size_t m_min_block_size;
+  AInputStream m_input;
+  AOutputStream m_output;
+
+  evio::GetThread const get_type{};
+  evio::PutThread const put_type{};
+
+  LinkBufferFixture() { }
+
+  void SetUp()
+  {
+#ifdef CWDEBUG
+    Dout(dc::notice, "v LinkBufferFixture::SetUp()");
+    debug::Mark setup;
+#endif
+
+    // Create a test InputDevice.
+    m_input_device = evio::create<MyInputDevice>();
+    m_input_device->init(0);           // Otherwise the device is not 'writable', which has influence on certain buffer functions (ie, sync()).
+    m_input_device->set_dont_close();
+    // Create a test OutputDevice.
+    m_output_device = evio::create<MyOutputDevice>();
+    m_output_device->init(1);           // Otherwise the device is not 'writable', which has influence on certain buffer functions (ie, sync()).
+    m_output_device->set_dont_close();
+    // Create a LinkBuffer for it.
+    m_output_device->output(m_input_device, 32, 256, -1);
+    m_buffer = static_cast<evio::LinkBuffer*>(static_cast<evio::Dev2Buf*>(m_input_device->get_ibuffer()));
+    // Calculate the actual minimum block size, see StreamBuf::StreamBuf.
+    m_min_block_size = utils::malloc_size(m_buffer->m_minimum_block_size + sizeof(evio::MemoryBlock)) - sizeof(evio::MemoryBlock);
+    // Use the link buffer for our ostream object.
+    m_output.rdbuf(m_buffer->rdbuf());
+    // And also for our istream object.
+    m_input.rdbuf(m_buffer->rdbuf());
+  }
+
+  void TearDown()
+  {
+#ifdef CWDEBUG
+    Dout(dc::notice, "v LinkBufferFixture::TearDown()");
+    debug::Mark teardown;
+#endif
+    m_input_device.reset();
+    m_output_device.reset();
+    // m_input can be reused (the call to input() above will effectively reset it).
+  }
+};
+
+TEST_F(LinkBufferFixture, Streaming)
+{
+  auto& size_hash_pair(utils::HasherStreamBuf::size_hash_pairs[utils::HasherStreamBuf::size_hash_pairs.size() - 1]);
+
+  utils::RandomStreamBuf random(size_hash_pair.size, 'A', 'Z');
+  utils::StreamHasher hasher;
+
+  std::vector<char> buf(m_buffer->m_minimum_block_size + 3);
+  std::array<size_t, 7> const test_sizes = {
+    1, 2, 5, m_buffer->m_minimum_block_size - 3, m_buffer->m_minimum_block_size - 1, m_buffer->m_minimum_block_size, m_buffer->m_minimum_block_size + 1
+  };
+  std::default_random_engine random_engine;
+  std::uniform_int_distribution<int> dist(0, test_sizes.size() - 1);
+
+  std::streamsize size, len;
+
+  Debug(dc::evio.off());
+  Dout(dc::notice, "Writing " << size_hash_pair.size << " bytes to the buffer.");
+  do
+  {
+    size = test_sizes[dist(random_engine)];
+    len = random.sgetn(buf.data(), size);
+    m_output.write(buf.data(), len);
+  }
+  while (len == size);
+
+  Dout(dc::notice, "Reading " << size_hash_pair.size << " bytes from the buffer.");
+  do
+  {
+    size = test_sizes[dist(random_engine)];
+    len = m_buffer->sgetn(buf.data(), size);
+    hasher.write(buf.data(), len);
+  }
+  while (len == size);
+  Debug(dc::evio.on());
+
+  EXPECT_EQ(hasher.digest(), size_hash_pair.hash);
 }

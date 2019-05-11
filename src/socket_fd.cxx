@@ -38,15 +38,15 @@ class Socket : public evio::InputDevice, public evio::OutputDevice
 
     static constexpr VT_type VT{
       /*InputDevice*/
-      nullptr,
+    { nullptr,
       read_from_fd,
       read_returned_zero,
       read_error,
-      data_received,
+      data_received },
       /*OutputDevice*/
-      nullptr,
+    { nullptr,
       write_to_fd,
-      write_error
+      write_error }
     };
   };
 
@@ -172,7 +172,7 @@ void Socket::VT_impl::read_from_fd(evio::InputDevice* _self, int fd)
   while (len == 256);
   if (strncmp(buf + len - 17, "#5</body></html>\n", 17) == 0)
   {
-    need_allow_deletion += std::move(self->stop_input_device());
+    need_allow_deletion += self->stop_input_device();
     ev_break(EV_A_ EVBREAK_ALL);
   }
 }
