@@ -70,8 +70,8 @@ class FileDescriptor : public virtual evio::FileDescriptor
     EXPECT_EQ(s_instance_count, 0);
   }
 
-  virtual bool test_valid_input_fd(bool expected) const { return true; }
-  virtual bool test_valid_output_fd(bool expected) const { return true; }
+  virtual bool test_valid_input_fd(bool UNUSED_ARG(expected)) const { return true; }
+  virtual bool test_valid_output_fd(bool UNUSED_ARG(expected)) const { return true; }
 
  protected:
   // Event: the filedescriptor(s) of this device were just closed (close_fds() was called).

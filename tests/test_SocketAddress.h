@@ -91,12 +91,17 @@ TEST(SocketAddressDeathTest, DefaultConstruction) {
   CALL(test_equal(sa1, sa2));
 }
 
+uint16_t htons_(uint16_t in)
+{
+  return htons(in);
+}
+
 struct sockaddr_in const sin_data = {
-  AF_INET, htons(65040), { htonl((254 << 24)|(220 << 16)|(186 << 8)|152) }, { 0, }
+  AF_INET, htons_(65040), { htonl((254 << 24)|(220 << 16)|(186 << 8)|152) }, { 0, }
 };
 
 struct sockaddr_in6 const sin6_data = {
-  AF_INET6, htons(65040), 0, { 0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10, 0x1, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef }, 0
+  AF_INET6, htons_(65040), 0, { 0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10, 0x1, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef }, 0
 };
 
 struct sockaddr_un const sun_data = {
@@ -190,29 +195,29 @@ char const* const missing_trailing_port_error = "missing trailing \":port\"";
 char const* const trailing_characters_error = "trailing characters after port number";
 
 std::array<InOut, 23> const faulty_sockaddr_data = {{
-  { "[41c0::666a::]:0", multiple_double_colon_error },
-  { "[41c0::666a::1]:0", multiple_double_colon_error },
-  { "[41c0:::666a]:0", from_chars_failed_error },
-  { "[:41c0::666a]:0", colon_start_error },
-  { "[::41c0::666a]:0", multiple_double_colon_error },
-  { "[0:0:ffff::100.101.102.103]:0", ipv4_mapping_error },
-  { "[41c0:: 123]:0", invalid_argument_error },
-  { " [41c0::123]:0", invalid_argument_error },
-  { "[ 41c0::123]:0", invalid_argument_error },
-  { "[41c0 ::123]:0", expected_colon_at_error },
-  { "[::ffff:0.01.256.00]:0", out_of_range_error },
-  { "[::ffff:10.1.a.0]:0", invalid_argument_error },
-  { "[::ffff:10.1.-0.0]:0", invalid_argument_error },
-  { "[::ffff:10.1.+1.0]:0", invalid_argument_error },
-  { "[::ffff:10.1.1.0x0]:0", missing_closing_bracket_error },
-  { "[::ffff:10.1. 123.42]:0", invalid_argument_error },
-  { "[::1]", missing_trailing_port_error },
-  { "[::1]:", invalid_argument_error },
-  { "[::1]:0x0", trailing_characters_error },
-  { "[::1]:-0", invalid_argument_error },
-  { "[::1]:+1", invalid_argument_error },
-  { "[::1]: 123", invalid_argument_error },
-  { "[::1]:65536", out_of_range_error },
+  { "[41c0::666a::]:0", multiple_double_colon_error, 0 },
+  { "[41c0::666a::1]:0", multiple_double_colon_error, 0 },
+  { "[41c0:::666a]:0", from_chars_failed_error, 0 },
+  { "[:41c0::666a]:0", colon_start_error, 0 },
+  { "[::41c0::666a]:0", multiple_double_colon_error, 0 },
+  { "[0:0:ffff::100.101.102.103]:0", ipv4_mapping_error, 0 },
+  { "[41c0:: 123]:0", invalid_argument_error, 0 },
+  { " [41c0::123]:0", invalid_argument_error, 0 },
+  { "[ 41c0::123]:0", invalid_argument_error, 0 },
+  { "[41c0 ::123]:0", expected_colon_at_error, 0 },
+  { "[::ffff:0.01.256.00]:0", out_of_range_error, 0 },
+  { "[::ffff:10.1.a.0]:0", invalid_argument_error, 0 },
+  { "[::ffff:10.1.-0.0]:0", invalid_argument_error, 0 },
+  { "[::ffff:10.1.+1.0]:0", invalid_argument_error, 0 },
+  { "[::ffff:10.1.1.0x0]:0", missing_closing_bracket_error, 0 },
+  { "[::ffff:10.1. 123.42]:0", invalid_argument_error, 0 },
+  { "[::1]", missing_trailing_port_error, 0 },
+  { "[::1]:", invalid_argument_error, 0 },
+  { "[::1]:0x0", trailing_characters_error, 0 },
+  { "[::1]:-0", invalid_argument_error, 0 },
+  { "[::1]:+1", invalid_argument_error, 0 },
+  { "[::1]: 123", invalid_argument_error, 0 },
+  { "[::1]:65536", out_of_range_error, 0 },
 }};
 
 TEST(SocketAddress, FaultyStringViewConstruction)

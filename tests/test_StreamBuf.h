@@ -17,7 +17,7 @@ TEST(StreamBuf, TypeDefs) {
   EXPECT_TRUE((std::is_same<StreamBuf::off_type, std::streamoff>::value));
 }
 
-class MyOutputDevice : public evio::OutputDevice
+class StreamBuf_OutputDevice : public evio::OutputDevice
 {
  private:
   bool m_sync_called;
@@ -42,7 +42,7 @@ class MyOutputDevice : public evio::OutputDevice
 class OutputBufferFixture : public testing::Test
 {
  protected:
-  boost::intrusive_ptr<MyOutputDevice> m_output_device;
+  boost::intrusive_ptr<StreamBuf_OutputDevice> m_output_device;
   evio::OutputStream m_output;
   evio::OutputBuffer* m_buffer;
   size_t m_min_block_size;
@@ -60,7 +60,7 @@ class OutputBufferFixture : public testing::Test
 #endif
 
     // Create a test OutputDevice.
-    m_output_device = evio::create<MyOutputDevice>();
+    m_output_device = evio::create<StreamBuf_OutputDevice>();
     m_output_device->init(1);           // Otherwise the device is not 'writable', which has influence on certain buffer functions (ie, sync()).
     m_output_device->set_dont_close();
     // Create an OutputBuffer for it.
@@ -309,21 +309,21 @@ TEST_F(OutputBufferFixture, WriteData)
   EXPECT_EQ(s, "XY\nABCDEF!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 }
 
-class MyInputDevice : public evio::InputDevice
+class StreamBuf_InputDevice : public evio::InputDevice
 {
  public:
   evio::InputBuffer* get_ibuffer() const { return m_ibuffer; }
   void set_dont_close() { m_flags |= INTERNAL_FDS_DONT_CLOSE; }
 };
 
-class MyInputDecoder : public evio::InputDecoder
+class StreamBuf_InputDecoder : public evio::InputDecoder
 {
  public:
   using evio::InputDecoder::InputDecoder;
 
-  evio::RefCountReleaser decode(evio::MsgBlock&& msg, evio::GetThread type) override
+  evio::RefCountReleaser decode(evio::MsgBlock&& msg, evio::GetThread UNUSED_ARG(type)) override
   {
-    DoutEntering(dc::notice, "MyInputDecoder::decode(\"" << libcwd::buf2str(msg.get_start(), msg.get_size()) << "\", type)");
+    DoutEntering(dc::notice, "StreamBuf_InputDecoder::decode(\"" << libcwd::buf2str(msg.get_start(), msg.get_size()) << "\", type)");
     return {};
   }
 };
@@ -331,8 +331,8 @@ class MyInputDecoder : public evio::InputDecoder
 class InputBufferFixture : public testing::Test
 {
  protected:
-  boost::intrusive_ptr<MyInputDevice> m_input_device;
-  MyInputDecoder m_input;
+  boost::intrusive_ptr<StreamBuf_InputDevice> m_input_device;
+  StreamBuf_InputDecoder m_input;
   evio::InputBuffer* m_buffer;
   size_t m_min_block_size;
 
@@ -349,7 +349,7 @@ class InputBufferFixture : public testing::Test
 #endif
 
     // Create a test InputDevice.
-    m_input_device = evio::create<MyInputDevice>();
+    m_input_device = evio::create<StreamBuf_InputDevice>();
     m_input_device->init(0);           // Otherwise the device is not 'writable', which has influence on certain buffer functions (ie, sync()).
     m_input_device->set_dont_close();
     // Create an InputBuffer for it.
@@ -429,8 +429,8 @@ class AOutputStream : public std::ostream
 class LinkBufferFixture : public testing::Test
 {
  protected:
-  boost::intrusive_ptr<MyInputDevice> m_input_device;
-  boost::intrusive_ptr<MyOutputDevice> m_output_device;
+  boost::intrusive_ptr<StreamBuf_InputDevice> m_input_device;
+  boost::intrusive_ptr<StreamBuf_OutputDevice> m_output_device;
   evio::LinkBuffer* m_buffer;
   size_t m_min_block_size;
   AInputStream m_input;
@@ -449,11 +449,11 @@ class LinkBufferFixture : public testing::Test
 #endif
 
     // Create a test InputDevice.
-    m_input_device = evio::create<MyInputDevice>();
+    m_input_device = evio::create<StreamBuf_InputDevice>();
     m_input_device->init(0);           // Otherwise the device is not 'writable', which has influence on certain buffer functions (ie, sync()).
     m_input_device->set_dont_close();
     // Create a test OutputDevice.
-    m_output_device = evio::create<MyOutputDevice>();
+    m_output_device = evio::create<StreamBuf_OutputDevice>();
     m_output_device->init(1);           // Otherwise the device is not 'writable', which has influence on certain buffer functions (ie, sync()).
     m_output_device->set_dont_close();
     // Create a LinkBuffer for it.
