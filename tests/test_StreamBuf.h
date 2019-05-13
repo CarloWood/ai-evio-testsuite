@@ -2,6 +2,8 @@
 #include "evio/StreamBuf.h"
 #include "utils/RandomStream.h"
 #include "utils/StreamHasher.h"
+#include <fcntl.h>
+#include <unistd.h>
 #ifdef CWDEBUG
 #include <libcwd/buf2str.h>
 #endif
@@ -321,7 +323,7 @@ class StreamBuf_InputDecoder : public evio::InputDecoder
  public:
   using evio::InputDecoder::InputDecoder;
 
-  evio::RefCountReleaser decode(evio::MsgBlock&& msg, evio::GetThread UNUSED_ARG(type)) override
+  evio::RefCountReleaser decode(evio::MsgBlock&& CWDEBUG_ONLY(msg), evio::GetThread UNUSED_ARG(type)) override
   {
     DoutEntering(dc::notice, "StreamBuf_InputDecoder::decode(\"" << libcwd::buf2str(msg.get_start(), msg.get_size()) << "\", type)");
     return {};
@@ -335,6 +337,7 @@ class InputBufferFixture : public testing::Test
   StreamBuf_InputDecoder m_input;
   evio::InputBuffer* m_buffer;
   size_t m_min_block_size;
+  int m_pipefd[2];
 
   evio::GetThread const get_type{};
   evio::PutThread const put_type{};
@@ -348,10 +351,12 @@ class InputBufferFixture : public testing::Test
     debug::Mark setup;
 #endif
 
+    // Get some valid fd.
+    pipe2(m_pipefd, O_CLOEXEC);
+
     // Create a test InputDevice.
     m_input_device = evio::create<StreamBuf_InputDevice>();
-    m_input_device->init(0);           // Otherwise the device is not 'writable', which has influence on certain buffer functions (ie, sync()).
-    m_input_device->set_dont_close();
+    m_input_device->init(m_pipefd[1]);           // Otherwise the device is not 'writable', which has influence on certain buffer functions (ie, sync()).
     // Create an InputBuffer for it.
     m_input_device->input(m_input, 32);
     m_buffer = m_input_device->get_ibuffer();
@@ -367,6 +372,8 @@ class InputBufferFixture : public testing::Test
 #endif
     m_input_device.reset();
     // m_input can be reused (the call to input() above will effectively reset it).
+
+    close(m_pipefd[0]);
   }
 };
 
@@ -435,6 +442,8 @@ class LinkBufferFixture : public testing::Test
   size_t m_min_block_size;
   AInputStream m_input;
   AOutputStream m_output;
+  int m_pipefd[2];
+  static constexpr size_t minimum_block_size = 32;
 
   evio::GetThread const get_type{};
   evio::PutThread const put_type{};
@@ -448,19 +457,23 @@ class LinkBufferFixture : public testing::Test
     debug::Mark setup;
 #endif
 
+    // Get some valid fd.
+    pipe2(m_pipefd, O_CLOEXEC);
+
     // Create a test InputDevice.
     m_input_device = evio::create<StreamBuf_InputDevice>();
-    m_input_device->init(0);           // Otherwise the device is not 'writable', which has influence on certain buffer functions (ie, sync()).
+    m_input_device->init(m_pipefd[1]);  // Otherwise the device is not 'writable', which has influence on certain buffer functions (ie, sync()).
     m_input_device->set_dont_close();
     // Create a test OutputDevice.
     m_output_device = evio::create<StreamBuf_OutputDevice>();
-    m_output_device->init(1);           // Otherwise the device is not 'writable', which has influence on certain buffer functions (ie, sync()).
+    m_output_device->init(m_pipefd[0]); // Otherwise the device is not 'writable', which has influence on certain buffer functions (ie, sync()).
     m_output_device->set_dont_close();
     // Create a LinkBuffer for it.
-    m_output_device->output(m_input_device, 32, 256, -1);
+    m_output_device->output(m_input_device, minimum_block_size, 8 * minimum_block_size, -1);
     m_buffer = static_cast<evio::LinkBuffer*>(static_cast<evio::Dev2Buf*>(m_input_device->get_ibuffer()));
     // Calculate the actual minimum block size, see StreamBuf::StreamBuf.
     m_min_block_size = utils::malloc_size(m_buffer->m_minimum_block_size + sizeof(evio::MemoryBlock)) - sizeof(evio::MemoryBlock);
+    ASSERT(m_min_block_size == minimum_block_size);
     // Use the link buffer for our ostream object.
     m_output.rdbuf(m_buffer->rdbuf());
     // And also for our istream object.
@@ -479,27 +492,59 @@ class LinkBufferFixture : public testing::Test
   }
 };
 
-TEST_F(LinkBufferFixture, Streaming)
+class RandomFixture : public LinkBufferFixture
 {
-  auto& size_hash_pair(utils::HasherStreamBuf::size_hash_pairs[utils::HasherStreamBuf::size_hash_pairs.size() - 1]);
-
-  utils::RandomStreamBuf random(size_hash_pair.size, 'A', 'Z');
+ protected:
+  utils::HasherStreamBuf::size_hash_pair_t const size_hash_pair;
+  utils::RandomStreamBuf random;
   utils::StreamHasher hasher;
-
-  std::vector<char> buf(m_buffer->m_minimum_block_size + 3);
-  std::array<size_t, 7> const test_sizes = {
-    1, 2, 5, m_buffer->m_minimum_block_size - 3, m_buffer->m_minimum_block_size - 1, m_buffer->m_minimum_block_size, m_buffer->m_minimum_block_size + 1
+  std::vector<char> buf;
+  std::array<size_t, 8> const test_sizes = {
+    1, 2, 5, minimum_block_size - 3, minimum_block_size - 1, minimum_block_size, minimum_block_size + 1, minimum_block_size + 2
   };
   std::default_random_engine random_engine;
-  std::uniform_int_distribution<int> dist(0, test_sizes.size() - 1);
+  std::uniform_int_distribution<int> read_dist;
+  std::uniform_int_distribution<int> write_dist;
 
-  std::streamsize size, len;
+  RandomFixture() :
+    size_hash_pair(utils::HasherStreamBuf::size_hash_pairs[8]), // 10^8 bytes.
+    random(size_hash_pair.size, 'A', 'Z'),
+    buf(minimum_block_size + 3),
+    random_engine(160433238),
+    read_dist(0, test_sizes.size() - 1),
+    write_dist(0, test_sizes.size() - 2) { }
 
-  Debug(dc::evio.off());
+  void SetUp()
+  {
+#ifdef CWDEBUG
+    Dout(dc::notice, "v RandomFixture::SetUp()");
+    debug::Mark setup;
+#endif
+    LinkBufferFixture::SetUp();
+    if (size_hash_pair.size > 1000)
+      Debug(dc::evio.off());
+  }
+
+  void TearDown()
+  {
+#ifdef CWDEBUG
+    Dout(dc::notice, "v RandomFixture::TearDown()");
+    debug::Mark teardown;
+#endif
+    if (size_hash_pair.size > 1000)
+      Debug(dc::evio.on());
+    EXPECT_EQ(hasher.digest(), size_hash_pair.hash);
+    LinkBufferFixture::TearDown();
+  }
+};
+
+TEST_F(RandomFixture, Streaming_WriteThenRead)
+{
   Dout(dc::notice, "Writing " << size_hash_pair.size << " bytes to the buffer.");
+  std::streamsize size, len;
   do
   {
-    size = test_sizes[dist(random_engine)];
+    size = test_sizes[write_dist(random_engine)];
     len = random.sgetn(buf.data(), size);
     m_output.write(buf.data(), len);
   }
@@ -508,12 +553,33 @@ TEST_F(LinkBufferFixture, Streaming)
   Dout(dc::notice, "Reading " << size_hash_pair.size << " bytes from the buffer.");
   do
   {
-    size = test_sizes[dist(random_engine)];
+    size = test_sizes[read_dist(random_engine)];
     len = m_buffer->sgetn(buf.data(), size);
     hasher.write(buf.data(), len);
   }
   while (len == size);
-  Debug(dc::evio.on());
+}
 
-  EXPECT_EQ(hasher.digest(), size_hash_pair.hash);
+TEST_F(RandomFixture, Streaming_AlternateWriteRead)
+{
+  Dout(dc::notice, "Writing/Reading " << size_hash_pair.size << " bytes to the buffer.");
+  bool writing_finished = false;
+  bool reading_finished = false;
+  do
+  {
+    if (!writing_finished)
+    {
+      std::streamsize size = test_sizes[write_dist(random_engine)];
+      std::streamsize len = random.sgetn(buf.data(), size);
+      m_output.write(buf.data(), len);
+      writing_finished = len != size;
+      if (writing_finished)
+        m_output << std::flush;
+    }
+    std::streamsize size = test_sizes[read_dist(random_engine)];
+    std::streamsize len = m_buffer->sgetn(buf.data(), size);
+    reading_finished = writing_finished && len != size;
+    hasher.write(buf.data(), len);
+  }
+  while (!reading_finished);
 }

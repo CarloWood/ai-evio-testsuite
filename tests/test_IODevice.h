@@ -451,15 +451,15 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
     static constexpr VT_type VT{
       /*TestSocket*/
         /*InputDevice*/
-        nullptr,
+      { nullptr,
         read_from_fd,
         read_returned_zero,
         read_error,
-        data_received,
+        data_received },
         /*OutputDevice*/
-        nullptr,
+      { nullptr,
         write_to_fd,
-        write_error
+        write_error }
     };
   };
 

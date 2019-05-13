@@ -98,30 +98,12 @@ TEST(InputDecoder, create_buffer) {
     EXPECT_TRUE(input_device->is_active(type).is_false());
 
     // Check if the expected arguments were passed.
-    {
-      std::stringstream ss;
-      input_device->get_ibuffer()->printOn(ss);
-      std::string line;
-      // Expected output starts with:
-      // minimum_block_size = 480; max_allocated_block_size = 18446744073709551615; buffer_full_watermark = 3840; current_number_of_blocks = 1
-      bool success_reading_next_line;
-      while ((success_reading_next_line = static_cast<bool>(std::getline(ss, line))))
-        if (line.substr(0, 18) == "minimum_block_size")
-          break;
-      ASSERT_TRUE(success_reading_next_line);
-      std::vector<size_t> numbers;
-      size_t pos = 0;
-      for (int n = 0; n < 3; ++n)
-      {
-        pos = line.find('=', pos) + 1;
-        size_t val = std::stoul(line.substr(pos));
-        numbers.push_back(val);
-      }
-      ASSERT_EQ(numbers.size(), 3UL);
-      ASSERT_EQ(numbers[0], number_of_args > 0 ? test_args.minimum_blocksize : evio::default_input_blocksize_c);
-      ASSERT_EQ(numbers[1], number_of_args > 1 ? test_args.buffer_full_watermark : 8 * numbers[0]);
-      ASSERT_EQ(numbers[2], number_of_args > 2 ? test_args.max_alloc : std::numeric_limits<size_t>::max());
-    }
+    size_t const expected_minimum_block_size = number_of_args > 0 ? test_args.minimum_blocksize : evio::default_input_blocksize_c;
+    ASSERT_EQ(input_device->get_ibuffer()->m_minimum_block_size, expected_minimum_block_size);
+    size_t const expected_buffer_full_watermark = number_of_args > 1 ? test_args.buffer_full_watermark : 8 * expected_minimum_block_size;
+    ASSERT_EQ(input_device->get_ibuffer()->m_buffer_full_watermark, expected_buffer_full_watermark);
+    size_t const expected_max_allocated_block_size = number_of_args > 2 ? test_args.max_alloc : std::numeric_limits<size_t>::max();
+    ASSERT_EQ(input_device->get_ibuffer()->m_max_allocated_block_size, expected_max_allocated_block_size);
   }
 
   // Clean up.

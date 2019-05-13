@@ -137,7 +137,9 @@ int main()
       // Write 25 chars at a time.
       size_t wlen = std::min(len, (size_t)25);
       sb->write(device, wlen);
+#ifdef DEBUGDBSTREAMBUF
       Debug(sb->printOn(std::cout));
+#endif
       device += wlen;
       len -= wlen;
       size += wlen;
@@ -162,7 +164,9 @@ int main()
       // Write 25 chars at a time.
       size_t wlen = std::min(len, (size_t)25);
       sb->write(device, wlen);
+#ifdef DEBUGDBSTREAMBUF
       Debug(sb->printOn(std::cout));
+#endif
       device += wlen;
       len -= wlen;
       size += wlen;
@@ -218,7 +222,9 @@ int main()
     Dout(dc::notice, "Empty buffer:");
     ASSERT(is_empty);
 #endif
+#ifdef DEBUGDBSTREAMBUF
     Debug(sb->printOn(std::cout));
+#endif
 
 //    ASSERT(!sb->buffer_full());
     ASSERT(len == sb->unused_in_last_block(evio::StreamBuf::PutThreadLock::rat(sb->put_area_lock(put_thread))));
@@ -240,7 +246,9 @@ int main()
       // Write 25 chars at a time.
       size_t wlen = std::min(len, (size_t)25);
       sb->write(buf, wlen);
+#ifdef DEBUGDBSTREAMBUF
       Debug(sb->printOn(std::cout));
+#endif
       buf += wlen;
       len -= wlen;
       size += wlen;
@@ -265,7 +273,9 @@ int main()
       // Write 25 chars at a time.
       size_t wlen = std::min(len, (size_t)25);
       sb->raw_sputn(buf, wlen);
+#ifdef DEBUGDBSTREAMBUF
       Debug(sb->printOn(std::cout));
+#endif
       buf += wlen;
       len -= wlen;
       size += wlen;

@@ -91,17 +91,16 @@ TEST(SocketAddressDeathTest, DefaultConstruction) {
   CALL(test_equal(sa1, sa2));
 }
 
-uint16_t htons_(uint16_t in)
-{
-  return htons(in);
-}
+// Statement expressions are not allowed at file scope. Therefore wrap them in a function.
+uint16_t htons_(uint16_t in) { return htons(in); }
+uint32_t htonl_(uint32_t in) { return htonl(in); }
 
 struct sockaddr_in const sin_data = {
-  AF_INET, htons_(65040), { htonl((254 << 24)|(220 << 16)|(186 << 8)|152) }, { 0, }
+  AF_INET, htons_(65040), { htonl_((254 << 24)|(220 << 16)|(186 << 8)|152) }, { 0, }
 };
 
 struct sockaddr_in6 const sin6_data = {
-  AF_INET6, htons_(65040), 0, { 0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10, 0x1, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef }, 0
+  AF_INET6, htons_(65040), 0, {{{ 0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10, 0x1, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef }}}, 0
 };
 
 struct sockaddr_un const sun_data = {
