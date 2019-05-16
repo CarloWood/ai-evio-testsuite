@@ -3,7 +3,7 @@
 #include "debug.h"
 #include <boost/program_options.hpp>
 
-#if 1
+#if 0
 #include "test_set_XXXsockbuf.h"
 #include "test_print_hostent_on.h"
 #include "test_size_of_addr.h"

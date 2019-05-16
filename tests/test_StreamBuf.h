@@ -505,6 +505,8 @@ class RandomFixture : public LinkBufferFixture
   std::default_random_engine random_engine;
   std::uniform_int_distribution<int> read_dist;
   std::uniform_int_distribution<int> write_dist;
+  bool use_fill;
+  std::atomic_bool done;
 
   RandomFixture() :
     size_hash_pair(utils::HasherStreamBuf::size_hash_pairs[8]), // 10^8 bytes.
@@ -512,7 +514,11 @@ class RandomFixture : public LinkBufferFixture
     buf(minimum_block_size + 3),
     random_engine(160433238),
     read_dist(0, test_sizes.size() - 1),
-    write_dist(0, test_sizes.size() - 2) { }
+    write_dist(0, test_sizes.size() - 2),
+    use_fill(false),
+    done(false) { }
+
+  std::streamsize fill(std::streamsize offset, char* buf, std::streamsize len);
 
   void SetUp()
   {
@@ -533,9 +539,46 @@ class RandomFixture : public LinkBufferFixture
 #endif
     if (size_hash_pair.size > 1000)
       Debug(dc::evio.on());
-    EXPECT_EQ(hasher.digest(), size_hash_pair.hash);
+    size_t digest = size_hash_pair.hash;
+    if (use_fill)
+      switch (size_hash_pair.size)
+      {
+        case 1:
+          digest = 1718778494716316058UL;
+          break;
+        case 10:
+          digest = 7103722163251064523UL;
+          break;
+        case 100:
+          digest = 3805333619560949641UL;
+          break;
+        case 1000:
+          digest = 8152631729821103751UL;
+          break;
+        case 10000:
+          digest = 13553392714589110238UL;
+          break;
+        case 100000:
+          digest = 6873471487155913012UL;
+          break;
+        case 1000000:
+          digest = 4029632496973681816UL;
+          break;
+        case 10000000:
+          digest = 7125079558958757456UL;
+          break;
+        case 100000000:
+          digest = 31304502237803872UL;
+          break;
+
+      }
+    EXPECT_EQ(hasher.digest(), digest);
     LinkBufferFixture::TearDown();
   }
+
+ public:
+  void write_thread();
+  void read_thread();
 };
 
 TEST_F(RandomFixture, Streaming_WriteThenRead)
@@ -562,7 +605,7 @@ TEST_F(RandomFixture, Streaming_WriteThenRead)
 
 TEST_F(RandomFixture, Streaming_AlternateWriteRead)
 {
-  Dout(dc::notice, "Writing/Reading " << size_hash_pair.size << " bytes to the buffer.");
+  Dout(dc::notice, "Writing/Reading " << size_hash_pair.size << " bytes to/from the buffer.");
   bool writing_finished = false;
   bool reading_finished = false;
   do
@@ -582,4 +625,120 @@ TEST_F(RandomFixture, Streaming_AlternateWriteRead)
     hasher.write(buf.data(), len);
   }
   while (!reading_finished);
+}
+
+std::streamsize RandomFixture::fill(std::streamsize offset, char* buf, std::streamsize len)
+{
+  static char data[129] = "abcdefghijklmnopqrstuvwxyz789012ABCDEFGHIJKLMNOPQRSTUVWXYZ&*()!\nabcdefghijklmnopqrstuvwxyz789012ABCDEFGHIJKLMNOPQRSTUVWXYZ&*()!\n";
+  ASSERT(len < 64);
+  std::memcpy(buf, data + offset % 64, len);
+  return std::min(len, std::streamsize(size_hash_pair.size) - offset);
+}
+
+void RandomFixture::write_thread()
+{
+  Debug(NAMESPACE_DEBUG::init_thread("PutThread", copy_from_main));
+  DoutEntering(dc::notice, "RandomFixture::write_thread()");
+  bool writing_finished = false;
+  std::default_random_engine write_thread_random_engine;
+  std::ios::iostate old_exceptions = m_output.exceptions();
+  m_output.exceptions(std::ios::eofbit | std::ios::failbit | std::ios::badbit);
+  ASSERT(m_output.good());
+  try
+  {
+    size_t total_size = 0;
+#ifdef DEBUGEVENTRECORDING
+    m_buffer->write_stream_offset = 0;
+#endif
+    do
+    {
+      std::streamsize size = test_sizes[write_dist(write_thread_random_engine)];
+#ifdef DEBUGEVENTRECORDING
+      std::streamsize len = fill(total_size, buf.data(), size);
+      ASSERT(m_buffer->write_stream_offset == total_size);
+#else
+      std::streamsize len = random.sgetn(buf.data(), size);
+#endif
+      m_output.write(buf.data(), len);
+      total_size += len;
+      writing_finished = len != size;
+      if (writing_finished)
+        m_output << std::flush;
+    }
+    while (!writing_finished);
+    Dout(dc::notice|flush_cf, "Wrote " << total_size << " bytes.");
+  }
+  catch (std::ios_base::failure const& error)
+  {
+    DoutFatal(dc::core, "Caught exception " << error.what());
+  }
+  m_output.exceptions(old_exceptions);
+  done = true;
+}
+
+void RandomFixture::read_thread()
+{
+  Debug(NAMESPACE_DEBUG::init_thread("GetThread", copy_from_main));
+  DoutEntering(dc::notice, "RandomFixture::read_thread()");
+  evio::GetThread type;
+  ASSERT(m_buffer->get_get_area_block_node(type));
+  std::default_random_engine read_thread_random_engine;
+  std::vector<char> read_thread_buf(minimum_block_size + 3);
+  size_t total_size = 0;
+#ifdef DEBUGEVENTRECORDING
+  m_buffer->read_stream_offset = 0;
+  char compare_buf[128];
+#endif
+  do
+  {
+    std::streamsize size = test_sizes[read_dist(read_thread_random_engine)];
+    std::streamsize len;
+    size_t count = 0;
+    do
+    {
+#ifdef DEBUGEVENTRECORDING
+      ASSERT(m_buffer->read_stream_offset == total_size);
+#endif
+      len = m_buffer->sgetn(read_thread_buf.data(), size);
+      if (len == 0 && ++count > 10000)
+      {
+        Dout(dc::notice, "Read " << total_size << " bytes.");
+        ASSERT(!done);
+        count = 0;
+      }
+    }
+    while (len == 0);
+#ifdef DEBUGEVENTRECORDING
+    std::streamsize ss = fill(total_size, compare_buf, len);
+    ASSERT(ss == len);
+    if (strncmp(compare_buf, read_thread_buf.data(), len))
+    {
+      Dout(dc::notice, "Read \"" << libcwd::buf2str(read_thread_buf.data(), len) << "\", expected \"" << libcwd::buf2str(compare_buf, len) << "\".");
+#ifdef DEBUGKEEPMEMORYBLOCKS
+      m_buffer->dump();
+#endif
+      for (auto data : m_buffer->recording_buffer)
+      {
+        Dout(dc::notice, *data);
+      }
+      DoutFatal(dc::core, "Read \"" << libcwd::buf2str(read_thread_buf.data(), len) << "\", expected \"" << libcwd::buf2str(compare_buf, len) << "\".");
+    }
+#endif
+    total_size += len;
+    hasher.write(read_thread_buf.data(), len);
+  }
+  while (total_size < size_hash_pair.size);
+}
+
+TEST_F(RandomFixture, Streaming_ConcurrentWriteRead)
+{
+  Dout(dc::notice, "Writing/Reading " << size_hash_pair.size << " bytes to/from the buffer.");
+  Dout(dc::notice, "Channel dc::notice resides at " << (void*)&libcwd::channels::dc::notice);
+#ifdef DEBUGEVENTRECORDING
+  use_fill = true;
+#endif
+  std::thread t1(&RandomFixture::read_thread, this);
+  std::thread t2(&RandomFixture::write_thread, this);
+  t1.join();
+  t2.join();
 }
