@@ -352,7 +352,8 @@ class InputBufferFixture : public testing::Test
 #endif
 
     // Get some valid fd.
-    pipe2(m_pipefd, O_CLOEXEC);
+    if (pipe2(m_pipefd, O_CLOEXEC) == -1)
+      DoutFatal(dc::core|error_cf, "pipe2(" << m_pipefd << ", O_CLOEXEC) = -1");
 
     // Create a test InputDevice.
     m_input_device = evio::create<StreamBuf_InputDevice>();
@@ -458,7 +459,8 @@ class LinkBufferFixture : public testing::Test
 #endif
 
     // Get some valid fd.
-    pipe2(m_pipefd, O_CLOEXEC);
+    if (pipe2(m_pipefd, O_CLOEXEC) == -1)
+      DoutFatal(dc::core|error_cf, "pipe2(" << m_pipefd << ", O_CLOEXEC) = -1");
 
     // Create a test InputDevice.
     m_input_device = evio::create<StreamBuf_InputDevice>();
@@ -505,6 +507,7 @@ class RandomFixture : public LinkBufferFixture
   std::default_random_engine random_engine;
   std::uniform_int_distribution<int> read_dist;
   std::uniform_int_distribution<int> write_dist;
+  std::uniform_int_distribution<int> true_or_false;
   bool use_fill;
   std::atomic_bool done;
 
@@ -515,6 +518,7 @@ class RandomFixture : public LinkBufferFixture
     random_engine(160433238),
     read_dist(0, test_sizes.size() - 1),
     write_dist(0, test_sizes.size() - 2),
+    true_or_false(0, 1),
     use_fill(false),
     done(false) { }
 
@@ -577,8 +581,8 @@ class RandomFixture : public LinkBufferFixture
   }
 
  public:
-  void write_thread();
-  void read_thread();
+  void write_thread(int test);
+  void read_thread(int test);
 };
 
 TEST_F(RandomFixture, Streaming_WriteThenRead)
@@ -635,10 +639,10 @@ std::streamsize RandomFixture::fill(std::streamsize offset, char* buf, std::stre
   return std::min(len, std::streamsize(size_hash_pair.size) - offset);
 }
 
-void RandomFixture::write_thread()
+void RandomFixture::write_thread(int test)
 {
   Debug(NAMESPACE_DEBUG::init_thread("PutThread", copy_from_main));
-  DoutEntering(dc::notice, "RandomFixture::write_thread()");
+  DoutEntering(dc::notice, "RandomFixture::write_thread(" << test << ")");
   bool writing_finished = false;
   std::default_random_engine write_thread_random_engine;
   std::ios::iostate old_exceptions = m_output.exceptions();
@@ -659,8 +663,19 @@ void RandomFixture::write_thread()
 #else
       std::streamsize len = random.sgetn(buf.data(), size);
 #endif
-      m_output.write(buf.data(), len);
+      if (test == 1 && true_or_false(write_thread_random_engine) == 1)
+      {
+        for (int i = 0; i < len; ++i)
+          m_buffer->sputc(buf[i]);
+#ifdef DEBUGEVENTRECORDING
+        m_buffer->write_stream_offset = total_size + len;
+#endif
+        Dout(dc::evio, "Wrote \"" << libcwd::buf2str(&buf[0], len) << "\" using sputc.");
+      }
+      else
+        m_output.write(buf.data(), len);
       total_size += len;
+      Dout(dc::evio, "Wrote " << total_size << " bytes so far.");
       writing_finished = len != size;
       if (writing_finished)
         m_output << std::flush;
@@ -676,12 +691,14 @@ void RandomFixture::write_thread()
   done = true;
 }
 
-void RandomFixture::read_thread()
+void RandomFixture::read_thread(int test)
 {
   Debug(NAMESPACE_DEBUG::init_thread("GetThread", copy_from_main));
-  DoutEntering(dc::notice, "RandomFixture::read_thread()");
+  DoutEntering(dc::notice, "RandomFixture::read_thread(" << test << ")");
+#ifdef CWDEBUG
   evio::GetThread type;
   ASSERT(m_buffer->get_get_area_block_node(type));
+#endif
   std::default_random_engine read_thread_random_engine;
   std::vector<char> read_thread_buf(minimum_block_size + 3);
   size_t total_size = 0;
@@ -699,11 +716,44 @@ void RandomFixture::read_thread()
 #ifdef DEBUGEVENTRECORDING
       ASSERT(m_buffer->read_stream_offset == total_size);
 #endif
-      len = m_buffer->sgetn(read_thread_buf.data(), size);
-      if (len == 0 && ++count > 10000)
+      if (test == 1 && true_or_false(read_thread_random_engine) == 1)
       {
-        Dout(dc::notice, "Read " << total_size << " bytes.");
-        ASSERT(!done);
+        len = m_buffer->buf2dev_contiguous();
+        if (len == 0)
+          len = m_buffer->buf2dev_contiguous_forced();
+        len = std::min(len, size);
+        for (int i = 0; i < len; ++i)
+          read_thread_buf[i] = m_buffer->sbumpc();
+#ifdef DEBUGEVENTRECORDING
+        m_buffer->read_stream_offset = total_size + len;
+#endif
+      }
+      else
+        len = m_buffer->sgetn(read_thread_buf.data(), size);
+      Dout(dc::evio, "Read: \"" << libcwd::buf2str(read_thread_buf.data(), len) << "\".");
+      if (len == 0)
+      {
+        if (++count > 1000)
+        {
+          {
+            evio::StreamBuf::GetThreadLock::crat get_area_rat(m_buffer->get_area_lock(get_type));
+            evio::StreamBuf::PutThreadLock::crat put_area_rat(m_buffer->put_area_lock(put_type));
+            Dout(dc::notice, "Read " << total_size << " bytes. egptr = " << (void*)m_buffer->egptr(get_area_rat) <<
+                 "; m_next_egptr = " << (void*)m_buffer->m_next_egptr << "; pptr = " << (void*)m_buffer->pptr(put_area_rat));
+          }
+
+#ifdef DEBUGEVENTRECORDING
+          for (auto data : m_buffer->recording_buffer)
+          {
+            Dout(dc::notice, *data);
+          }
+          DoutFatal(dc::core, "Read " << total_size << " bytes.");
+#endif
+          ASSERT(!done);
+          count = 0;
+        }
+      }
+      else
         count = 0;
       }
     }
@@ -733,12 +783,23 @@ void RandomFixture::read_thread()
 TEST_F(RandomFixture, Streaming_ConcurrentWriteRead)
 {
   Dout(dc::notice, "Writing/Reading " << size_hash_pair.size << " bytes to/from the buffer.");
-  Dout(dc::notice, "Channel dc::notice resides at " << (void*)&libcwd::channels::dc::notice);
 #ifdef DEBUGEVENTRECORDING
   use_fill = true;
 #endif
-  std::thread t1(&RandomFixture::read_thread, this);
-  std::thread t2(&RandomFixture::write_thread, this);
+  std::thread t1(&RandomFixture::read_thread, this, 0);
+  std::thread t2(&RandomFixture::write_thread, this, 0);
+  t1.join();
+  t2.join();
+}
+
+TEST_F(RandomFixture, Streaming_ConcurrentSputcSbumpc)
+{
+  Dout(dc::notice, "Writing/Reading " << size_hash_pair.size << " bytes to/from the buffer.");
+#ifdef DEBUGEVENTRECORDING
+  use_fill = true;
+#endif
+  std::thread t1(&RandomFixture::read_thread, this, 1);
+  std::thread t2(&RandomFixture::write_thread, this, 1);
   t1.join();
   t2.join();
 }
