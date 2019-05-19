@@ -15,7 +15,7 @@ static void test_is_unspecified(evio::SocketAddress const& sa)
   EXPECT_EQ(AF_UNSPEC, sa.family());
 
   evio::SocketAddress::arpa_buf_t buf;
-  EXPECT_DEATH({ sa.ptr_qname(buf); }, "^FATAL *:.*[Uu][Nn][Ss][Pp][Ee][Cc]");
+  EXPECT_DEATH({ sa.ptr_qname(buf); }, "SocketAddress::ptr_qname called.*[Uu][Nn][Ss][Pp][Ee][Cc]");
 }
 
 static void test_is_ip4(evio::SocketAddress const& sa)
@@ -60,7 +60,7 @@ static void test_is_un(evio::SocketAddress const& sa)
   EXPECT_EQ(AF_UNIX, sa.family());
 
   evio::SocketAddress::arpa_buf_t buf;
-  EXPECT_DEATH({ sa.ptr_qname(buf); }, "^FATAL *: .*ptr_qname");
+  EXPECT_DEATH({ sa.ptr_qname(buf); }, "SocketAddress::ptr_qname called for /.*isn't an IP");
 }
 
 static void test_equal(evio::SocketAddress const& sa1, evio::SocketAddress const& sa2)
@@ -261,7 +261,11 @@ TEST(SocketAddressDeathTest, FaultyStringViewConstructionWithFamily)
       {
         if (*test_case.expected == '-')
         {
+#ifdef CWDEBUG
           EXPECT_DEATH({ evio::SocketAddress sa(test_case.family, test_case.input); }, "^COREDUMP *:.*Assertion");
+#else
+          EXPECT_DEATH({ evio::SocketAddress sa(test_case.family, test_case.input); }, "Assertion .*failed");
+#endif
         }
         else
         {

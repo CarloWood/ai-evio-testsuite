@@ -1,7 +1,9 @@
 #include "evio/InputDecoder.h"
 #include "utils/malloc_size.h"
 #include "utils/is_power_of_two.h"
+#ifdef CWDEBUG
 #include "libcwd/buf2str.h"
+#endif
 #include <cstdlib>
 #include <fcntl.h>      // O_CLOEXEC
 
@@ -24,7 +26,7 @@ class MyInputDecoder : public evio::InputDecoder
  public:
   using evio::InputDecoder::InputDecoder;
 
-  evio::RefCountReleaser decode(evio::MsgBlock&& msg, evio::GetThread UNUSED_ARG(type)) override
+  evio::RefCountReleaser decode(evio::MsgBlock&& CWDEBUG_ONLY(msg), evio::GetThread UNUSED_ARG(type)) override
   {
     DoutEntering(dc::notice, "MyInputDecoder::decode(\"" << libcwd::buf2str(msg.get_start(), msg.get_size()) << "\", type)");
     return {};

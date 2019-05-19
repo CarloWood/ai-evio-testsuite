@@ -272,7 +272,7 @@ class tcp_connection : public boost::enable_shared_from_this<tcp_connection>
     }
   }
 
-  void handle_write(const boost::system::error_code& e, size_t bytes_transferred)
+  void handle_write(const boost::system::error_code& e, size_t CWDEBUG_ONLY(bytes_transferred))
   {
     if (!e)
       Dout(dc::notice, prefix() << "Wrote " << bytes_transferred << " bytes.");
