@@ -735,13 +735,6 @@ void RandomFixture::read_thread(int test)
       {
         if (++count > 1000)
         {
-          {
-            evio::StreamBuf::GetThreadLock::crat get_area_rat(m_buffer->get_area_lock(get_type));
-            evio::StreamBuf::PutThreadLock::crat put_area_rat(m_buffer->put_area_lock(put_type));
-            Dout(dc::notice, "Read " << total_size << " bytes. egptr = " << (void*)m_buffer->egptr(get_area_rat) <<
-                 "; m_next_egptr = " << (void*)m_buffer->m_next_egptr << "; pptr = " << (void*)m_buffer->pptr(put_area_rat));
-          }
-
 #ifdef DEBUGEVENTRECORDING
           for (auto data : m_buffer->recording_buffer)
           {
@@ -755,7 +748,6 @@ void RandomFixture::read_thread(int test)
       }
       else
         count = 0;
-      }
     }
     while (len == 0);
 #ifdef DEBUGEVENTRECORDING
