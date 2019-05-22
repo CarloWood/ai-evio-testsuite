@@ -42,15 +42,13 @@ void MyInputBuffer::write(char const* device, size_t len)
 // Read len bytes from InputBuffer and write to buf.
 void MyInputBuffer::read(char* buf, size_t len)
 {
-  evio::GetThread type;
   while (len > 0)
   {
-    size_t rlen = std::min(len, force_next_contiguous_number_of_bytes(type));       // Use force_next_contiguous_number_of_bytes() before writing to raw_gptr()!
+    size_t rlen = std::min(len, force_next_contiguous_number_of_bytes());       // Use force_next_contiguous_number_of_bytes() before writing to raw_gptr()!
     ASSERT(rlen > 0);
     {
-      StreamBuf::GetThreadLock::wat get_area_wat(get_area_lock(type));
-      std::memcpy(buf, raw_gptr(get_area_wat), rlen);         // We read from the get area.
-      raw_gbump(get_area_wat, rlen);
+      std::memcpy(buf, raw_gptr(), rlen);       // We read from the get area.
+      raw_gbump(rlen);
     }
     buf += rlen;
     len -= rlen;
@@ -70,13 +68,12 @@ class MyOutputBuffer : public evio::OutputBuffer
 // Write len bytes from buf into OutputBuffer.
 void MyOutputBuffer::write(char const* buf, size_t len)
 {
-  evio::PutThread type;
   while (len > 0)
   {
-    size_t wlen = std::min(len, available_contiguous_number_of_bytes(PutThreadLock::rat(put_area_lock(type))));
+    size_t wlen = std::min(len, available_contiguous_number_of_bytes());
     if (wlen == 0)
     {
-      wlen = std::min(len, force_available_contiguous_number_of_bytes(type));
+      wlen = std::min(len, force_available_contiguous_number_of_bytes());
       ASSERT(wlen > 0);
     }
     char* put_area = raw_pptr();                // We write to the put area.
@@ -189,33 +186,26 @@ int main()
   {
     MyOutputBuffer* sb = new MyOutputBuffer(nullptr, minimum_blocksize, max_alloc, buffer_full_watermark);
 
-    evio::GetThread get_thread;
-#if CW_DEBUG
-    evio::PutThread put_thread;
-#endif
-
     Dout(dc::notice, "m_minimum_block_size = " << sb->m_minimum_block_size);
-    Dout(dc::notice, "has_multiple_blocks() = " << sb->has_multiple_blocks(get_thread, put_thread));
-    Dout(dc::notice, "unused_in_first_block() = " << sb->unused_in_first_block(evio::StreamBuf::GetThreadLock::rat(sb->get_area_lock(get_thread))));
-    Dout(dc::notice, "unused_in_last_block() = " << sb->unused_in_last_block(evio::StreamBuf::PutThreadLock::rat(sb->put_area_lock(put_thread))));
-    Dout(dc::notice, "get_data_size() = " << sb->get_data_size(get_thread, evio::StreamBuf::PutThreadLock::rat(sb->put_area_lock(put_thread))));
+    Dout(dc::notice, "has_multiple_blocks() = " << sb->has_multiple_blocks());
+    Dout(dc::notice, "unused_in_first_block() = " << sb->unused_in_first_block());
+    Dout(dc::notice, "unused_in_last_block() = " << sb->unused_in_last_block());
+    Dout(dc::notice, "get_data_size() = " << sb->get_data_size());
     Dout(dc::notice, "m_max_allocated_block_size = " << sb->m_max_allocated_block_size);
     // Protected.
     //Dout(dc::notice, "next_contiguous_number_of_bytes() = " << sb->next_contiguous_number_of_bytes());
     size_t len = 0;
-    while (sb->is_contiguous(len, evio::StreamBuf::GetThreadLock::rat(sb->get_area_lock(get_thread))))
+    while (sb->is_contiguous(len))
       ++len;
     --len;
     Dout(dc::notice, "is_contiguous(" << len << ") is largest size that return true.");
     // new_block_size is private because it calls get_data_size_upper_bound() which is fuzzy.
-    //Dout(dc::notice, "new_block_size() = " << sb->new_block_size(put_thread));
+    //Dout(dc::notice, "new_block_size() = " << sb->new_block_size());
 //    Dout(dc::notice, "buffer_full() = " << (sb->buffer_full() ? "true" : "false"));
 #ifdef CWDEBUG
     bool is_empty;
     {
-      evio::StreamBuf::GetThreadLock::rat get_area_rat(sb->get_area_lock(get_thread));
-      evio::StreamBuf::PutThreadLock::rat put_area_rat(sb->put_area_lock(put_thread));
-      is_empty = sb->buffer_empty(get_area_rat, put_area_rat);
+      is_empty = sb->buffer_empty();
       Dout(dc::notice, "buffer_empty() = " << (is_empty ? "true" : "false"));
     }
 
@@ -227,7 +217,7 @@ int main()
 #endif
 
 //    ASSERT(!sb->buffer_full());
-    ASSERT(len == sb->unused_in_last_block(evio::StreamBuf::PutThreadLock::rat(sb->put_area_lock(put_thread))));
+    ASSERT(len == sb->unused_in_last_block());
     ASSERT(len > 0);
 
     size_t const tlen = 2000;

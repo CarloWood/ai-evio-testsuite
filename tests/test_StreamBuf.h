@@ -85,32 +85,23 @@ class OutputBufferFixture : public testing::Test
 
   void test_size(size_t actual_size)
   {
-    {
-      evio::StreamBuf::GetThreadLock::crat get_area_rat(m_buffer->get_area_lock(get_type));
-      evio::StreamBuf::PutThreadLock::crat put_area_rat(m_buffer->put_area_lock(put_type));
-      EXPECT_EQ(m_buffer->buffer_empty(get_area_rat, put_area_rat), actual_size == 0);
+    EXPECT_EQ(m_buffer->buffer_empty(), actual_size == 0);
+    EXPECT_EQ(m_buffer->get_data_size(), actual_size);
 
-      EXPECT_EQ(m_buffer->get_data_size(get_type, put_area_rat), actual_size);
-    }
-    {
-      evio::StreamBuf::GetThreadLock::crat get_area_rat(m_buffer->get_area_lock(get_type));
-      EXPECT_EQ(m_buffer->StreamBufConsumer::buffer_empty(get_area_rat).is_transitory_true(), actual_size == 0);
-      EXPECT_EQ(m_buffer->StreamBufConsumer::buffer_empty(get_area_rat).is_false(), actual_size != 0);             // If we are the GetThread then non-empty stays non-empty.
+    EXPECT_EQ(m_buffer->StreamBufConsumer::buffer_empty().is_transitory_true(), actual_size == 0);
+    EXPECT_EQ(m_buffer->StreamBufConsumer::buffer_empty().is_false(), actual_size != 0);                // If we are the consumer thread then non-empty stays non-empty.
 
-      // The allocated block has initially a size equal to the minimum block size.
-      EXPECT_EQ(m_buffer->get_get_area_block_node(get_type)->get_size(), m_min_block_size);
+    // The allocated block has initially a size equal to the minimum block size.
+    EXPECT_EQ(m_buffer->get_get_area_block_node()->get_size(), m_min_block_size);
 
-      // The buffer is empty (and there is no race condition here, so the returned value is exact).
-      //EXPECT_EQ(m_buffer->get_data_size_lower_bound(get_area_rat), (std::streamsize)actual_size);
-    }
-    {
-      evio::StreamBuf::PutThreadLock::crat put_area_rat(m_buffer->put_area_lock(put_type));
-      EXPECT_EQ(m_buffer->StreamBufProducer::buffer_empty(put_area_rat).is_true(), actual_size == 0);              // If we are the PutThread then empty stays empty.
-      EXPECT_EQ(m_buffer->StreamBufProducer::buffer_empty(put_area_rat).is_transitory_false(), actual_size != 0);
+    // The buffer is empty (and there is no race condition here, so the returned value is exact).
+    //EXPECT_EQ(m_buffer->get_data_size_lower_bound(get_area_rat), (std::streamsize)actual_size);
 
-      // The buffer is empty (and there is no race condition here, so the returned value is exact).
-      EXPECT_EQ(m_buffer->get_data_size_upper_bound(put_area_rat), (std::streamsize)actual_size);
-    }
+    EXPECT_EQ(m_buffer->StreamBufProducer::buffer_empty().is_true(), actual_size == 0);              // If we are the PutThread then empty stays empty.
+    EXPECT_EQ(m_buffer->StreamBufProducer::buffer_empty().is_transitory_false(), actual_size != 0);
+
+    // The buffer is empty (and there is no race condition here, so the returned value is exact).
+    EXPECT_EQ(m_buffer->get_data_size_upper_bound(), (std::streamsize)actual_size);
   }
 };
 
@@ -134,22 +125,17 @@ TEST_F(OutputBufferFixture, StreamBuf)
   EXPECT_TRUE(m_output_device->sync_called());
 
   // The buffer only has a single allocated block.
-  EXPECT_FALSE(m_buffer->has_multiple_blocks(get_type, put_type));
+  EXPECT_FALSE(m_buffer->has_multiple_blocks());
   // The start of the block equals the current get area.
-  EXPECT_EQ(m_buffer->get_area_block_node_start(get_type), m_buffer->buf2dev_ptr());
+  EXPECT_EQ(m_buffer->get_area_block_node_start(), m_buffer->buf2dev_ptr());
 
   CALL(test_size(0));
 
-  {
-    evio::StreamBuf::GetThreadLock::crat get_area_rat(m_buffer->get_area_lock(get_type));
-    // The get area is non-existent (we only have one block, and all of it is available for writing).
-    EXPECT_EQ(m_buffer->unused_in_first_block(get_area_rat), 0UL);
-  }
-  {
-    evio::StreamBuf::PutThreadLock::crat put_area_rat(m_buffer->put_area_lock(put_type));
-    // The full block is available for writing.
-    EXPECT_EQ(m_buffer->unused_in_last_block(put_area_rat), m_min_block_size);
-  }
+  // The get area is non-existent (we only have one block, and all of it is available for writing).
+  EXPECT_EQ(m_buffer->unused_in_first_block(), 0UL);
+
+  // The full block is available for writing.
+  EXPECT_EQ(m_buffer->unused_in_last_block(), m_min_block_size);
 }
 
 TEST_F(OutputBufferFixture, WriteData)
@@ -212,7 +198,7 @@ TEST_F(OutputBufferFixture, WriteData)
   {
     char* cur_gptr;
     std::streamsize available;
-    m_buffer->debug_update_get_area(m_buffer->get_get_area_block_node(get_type), cur_gptr, available, evio::StreamBuf::GetThreadLock::wat(m_buffer->get_area_lock(get_type)));
+    m_buffer->debug_update_get_area(m_buffer->get_get_area_block_node(), cur_gptr, available);
   }
   // The get area is updated.
   EXPECT_EQ(m_buffer->buf2dev_contiguous(), 2UL);
@@ -225,7 +211,7 @@ TEST_F(OutputBufferFixture, WriteData)
   {
     char* cur_gptr;
     std::streamsize available;
-    m_buffer->debug_update_get_area(m_buffer->get_get_area_block_node(get_type), cur_gptr, available, evio::StreamBuf::GetThreadLock::wat(m_buffer->get_area_lock(get_type)));
+    m_buffer->debug_update_get_area(m_buffer->get_get_area_block_node(), cur_gptr, available);
   }
   EXPECT_EQ(m_buffer->buf2dev_contiguous(), 3UL);
 
@@ -246,7 +232,7 @@ TEST_F(OutputBufferFixture, WriteData)
   {
     char* cur_gptr;
     std::streamsize available;
-    m_buffer->debug_update_get_area(m_buffer->get_get_area_block_node(get_type), cur_gptr, available, evio::StreamBuf::GetThreadLock::wat(m_buffer->get_area_lock(get_type)));
+    m_buffer->debug_update_get_area(m_buffer->get_get_area_block_node(), cur_gptr, available);
   }
   EXPECT_EQ(m_buffer->buf2dev_contiguous(), 6UL);
 
@@ -261,7 +247,7 @@ TEST_F(OutputBufferFixture, WriteData)
   {
     char* cur_gptr;
     std::streamsize available;
-    m_buffer->debug_update_get_area(m_buffer->get_get_area_block_node(get_type), cur_gptr, available, evio::StreamBuf::GetThreadLock::wat(m_buffer->get_area_lock(get_type)));
+    m_buffer->debug_update_get_area(m_buffer->get_get_area_block_node(), cur_gptr, available);
   }
   EXPECT_EQ(m_buffer->buf2dev_contiguous(), 9UL);
 
@@ -275,7 +261,7 @@ TEST_F(OutputBufferFixture, WriteData)
   CALL(test_size(m_min_block_size + 1));
 
   // Now we have two blocks.
-  EXPECT_TRUE(m_buffer->has_multiple_blocks(get_type, put_type));
+  EXPECT_TRUE(m_buffer->has_multiple_blocks());
   // The room in the put area is again one less than its size (also this second block uses the minimum block size).
   EXPECT_EQ(link_buffer->dev2buf_contiguous(), m_min_block_size - 1);
   // And the get area still wasn't updated.
@@ -283,7 +269,7 @@ TEST_F(OutputBufferFixture, WriteData)
   {
     char* cur_gptr;
     std::streamsize available;
-    m_buffer->debug_update_get_area(m_buffer->get_get_area_block_node(get_type), cur_gptr, available, evio::StreamBuf::GetThreadLock::wat(m_buffer->get_area_lock(get_type)));
+    m_buffer->debug_update_get_area(m_buffer->get_get_area_block_node(), cur_gptr, available);
   }
   // Available to read is now the whole first block, but not that extra byte of course.
   EXPECT_EQ(m_buffer->buf2dev_contiguous(), m_min_block_size);
@@ -403,7 +389,7 @@ TEST_F(InputBufferFixture, ReadData)
   // This should perfectly fit in the first block, because the block was empty after reading it back,
   // which should have reset the put area to the beginning of the block at the moment we started
   // writing again.
-  EXPECT_FALSE(m_buffer->has_multiple_blocks(get_type, put_type));
+  EXPECT_FALSE(m_buffer->has_multiple_blocks());
 
   // Read everything character by character.
   std::string s;
@@ -413,17 +399,15 @@ TEST_F(InputBufferFixture, ReadData)
 
   // The buffer is now entirely empty.
   {
-    evio::StreamBuf::GetThreadLock::crat get_area_rat(m_buffer->get_area_lock(get_type));
-    evio::StreamBuf::PutThreadLock::crat put_area_rat(m_buffer->put_area_lock(put_type));
-    EXPECT_TRUE(m_buffer->buffer_empty(get_area_rat, put_area_rat));
-    EXPECT_EQ(m_buffer->unused_in_first_block(get_area_rat), m_min_block_size);
-    EXPECT_EQ(m_buffer->unused_in_last_block(put_area_rat), 0UL);
+    EXPECT_TRUE(m_buffer->buffer_empty());
+    EXPECT_EQ(m_buffer->unused_in_first_block(), m_min_block_size);
+    EXPECT_EQ(m_buffer->unused_in_last_block(), 0UL);
   }
-  EXPECT_FALSE(m_buffer->has_multiple_blocks(get_type, put_type));
+  EXPECT_FALSE(m_buffer->has_multiple_blocks());
 
   // But when we write to it - we DO end up with a new memory block, because last_gptr was not updated.
   EXPECT_EQ(m_buffer->sputn(".", 1), 1);
-  EXPECT_TRUE(m_buffer->has_multiple_blocks(get_type, put_type));
+  EXPECT_TRUE(m_buffer->has_multiple_blocks());
 }
 
 class AInputStream : public std::istream
@@ -696,8 +680,7 @@ void RandomFixture::read_thread(int test)
   Debug(NAMESPACE_DEBUG::init_thread("GetThread", copy_from_main));
   DoutEntering(dc::notice, "RandomFixture::read_thread(" << test << ")");
 #ifdef CWDEBUG
-  evio::GetThread type;
-  ASSERT(m_buffer->get_get_area_block_node(type));
+  ASSERT(m_buffer->get_get_area_block_node());
 #endif
   std::default_random_engine read_thread_random_engine;
   std::vector<char> read_thread_buf(minimum_block_size + 3);
