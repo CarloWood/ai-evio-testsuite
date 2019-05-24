@@ -528,7 +528,8 @@ class RandomFixture : public LinkBufferFixture
     if (size_hash_pair.size > 1000)
       Debug(dc::evio.off());
 #ifdef DEBUGSTREAMBUFSTATS
-    m_buffer->reset_stats();
+    m_buffer->StreamBufProducer::reset_stats();
+    m_buffer->StreamBufConsumer::reset_stats();
 #endif
   }
 
@@ -539,7 +540,8 @@ class RandomFixture : public LinkBufferFixture
     debug::Mark teardown;
 #endif
 #ifdef DEBUGSTREAMBUFSTATS
-    m_buffer->dump_stats();
+    m_buffer->StreamBufProducer::dump_stats();
+    m_buffer->StreamBufConsumer::dump_stats();
 #endif
     if (size_hash_pair.size > 1000)
       Debug(dc::evio.on());
