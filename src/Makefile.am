@@ -53,6 +53,35 @@ distclean-local:
 	rm -f *.s *.ii
 
 clean-local:
+	rm -f genmc_sync_egptr.c
+
+genmc_sync_egptr.c: ${srcdir}/genmc_sync_egptr.awk ${srcdir}/genmc_prelude.awk ${srcdir}/genmc_body.awk ${top_srcdir}/evio/StreamBuf.h
+	AWKPATH="${srcdir}" gawk -f ${srcdir}/genmc_sync_egptr.awk ${top_srcdir}/evio/StreamBuf.h > genmc_sync_egptr.c
+
+genmc_update_put_area.c: ${srcdir}/genmc_update_put_area.awk ${srcdir}/genmc_prelude.awk ${srcdir}/genmc_body.awk ${top_srcdir}/evio/StreamBuf.cxx
+	AWKPATH="${srcdir}" gawk -f ${srcdir}/genmc_update_put_area.awk ${top_srcdir}/evio/StreamBuf.cxx > genmc_update_put_area.c
+
+genmc_store_last_gptr.c: ${srcdir}/genmc_store_last_gptr.awk ${srcdir}/genmc_prelude.awk ${srcdir}/genmc_body.awk ${top_srcdir}/evio/StreamBuf.h
+	AWKPATH="${srcdir}" gawk -f ${srcdir}/genmc_store_last_gptr.awk ${top_srcdir}/evio/StreamBuf.h > genmc_store_last_gptr.c
+
+genmc_update_get_area.c: ${srcdir}/genmc_update_get_area.awk ${srcdir}/genmc_prelude.awk ${srcdir}/genmc_body.awk ${top_srcdir}/evio/StreamBuf.cxx
+	AWKPATH="${srcdir}" gawk -f ${srcdir}/genmc_update_get_area.awk ${top_srcdir}/evio/StreamBuf.cxx > genmc_update_get_area.c
+
+genmc_get_data_size.c: ${srcdir}/genmc_get_data_size.awk ${srcdir}/genmc_prelude.awk ${srcdir}/genmc_body.awk ${top_srcdir}/evio/StreamBuf.h
+	AWKPATH="${srcdir}" gawk -f ${srcdir}/genmc_get_data_size.awk ${top_srcdir}/evio/StreamBuf.h > genmc_get_data_size.c
+
+genmc_unused_in_last_block.c: ${srcdir}/genmc_unused_in_last_block.awk ${srcdir}/genmc_prelude.awk ${srcdir}/genmc_body.awk ${top_srcdir}/evio/StreamBuf.h
+	AWKPATH="${srcdir}" gawk -f ${srcdir}/genmc_unused_in_last_block.awk ${top_srcdir}/evio/StreamBuf.h > genmc_unused_in_last_block.c
+
+.PHONY: genmc
+
+genmc: genmc_buffer_reset_test.c genmc_sync_egptr.c genmc_update_put_area.c genmc_store_last_gptr.c genmc_update_get_area.c genmc_get_data_size.c genmc_unused_in_last_block.c
+#	genmc -unroll=5 -- -std=c11 -I${builddir} ${srcdir}/genmc_buffer_reset_test.c
+#	Use this to get everything in a single file for easier debugging.
+	grep -B 1000 '#include "genmc_sync_egptr\.c"' ${srcdir}/genmc_buffer_reset_test.c | grep -v '#include "genmc' > ${srcdir}/genmc_all.c
+	cat genmc_sync_egptr.c genmc_update_put_area.c genmc_store_last_gptr.c genmc_unused_in_last_block.c genmc_get_data_size.c genmc_update_get_area.c >> ${srcdir}/genmc_all.c
+	grep -A 1000 '#include "genmc_update_get_area\.c"' ${srcdir}/genmc_buffer_reset_test.c | grep -v '#include "genmc' >> ${srcdir}/genmc_all.c
+	genmc -unroll=5 -- -std=c11 -I${builddir} ${srcdir}/genmc_all.c
 endif
 
 MAINTAINERCLEANFILES = $(srcdir)/Makefile.in
