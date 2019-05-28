@@ -12,8 +12,6 @@
 #include <stdatomic.h>
 //#include <stdio.h>
 
-char dummy;
-char* const uninitialized = &dummy;
 char buffer[4] = { 0, 0, 0, 0 };
 char* const block_start = &buffer[0];
 char* const block_end = block_start + sizeof(buffer);
@@ -25,10 +23,16 @@ streamsize const m_total_allocated = block_end - block_start;
 // Constructor.
 
 // Common.
-_Atomic(char*) m_next_egptr = block_start;
-_Atomic(char*) m_last_pptr = uninitialized;   // The producer thread ONLY writes to this variable (pptr). The consumer thread ONLY reads it.
+_Atomic(int) m_resetting = 0;
+_Atomic(char*) m_last_pptr = block_start;   // The producer thread ONLY writes to this variable (pptr). The consumer thread ONLY reads it.
 _Atomic(char*) m_last_gptr = block_start;       // The producer thread ONLY read this variable. The consumer thread ONLY writes to it (gptr).
 _Atomic(streamsize) m_total_read = 0;
+
+// Util.
+streamsize min(streamsize a, streamsize b)
+{
+  return a < b ? a : b;
+}
 
 // Producer thread.
 streamsize m_total_reset = 0;
@@ -98,12 +102,18 @@ char* release_memory_block(MemoryBlock* block) { assert(0); return block_start; 
 char* MemoryBlock_block_start(MemoryBlock* this) { return block_start; }
 size_t MemoryBlock_get_size(MemoryBlock* this) { return block_end - block_start; }
 
-#include "genmc_sync_egptr.c"
-#include "genmc_update_put_area.c"
-#include "genmc_store_last_gptr.c"
-#include "genmc_unused_in_last_block.c"
-#include "genmc_get_data_size.c"
-#include "genmc_update_get_area.c"
+MemoryBlock m_get_area_block_node_instance;
+MemoryBlock* m_get_area_block_node = &m_get_area_block_node_instance;
+
+// INCLUDES_BEGIN
+#include "genmc_sync_egptr.h"
+#include "genmc_store_last_gptr.h"
+#include "genmc_unused_in_last_block.h"
+#include "genmc_get_data_size.h"
+#include "genmc_update_get_area.hc"
+#include "genmc_update_put_area.hc"
+#include "genmc_xsgetn_a.hc"
+// INCLUDES_END
 
 int PRODUCER_RESET_AFTER_ONE_BYTE = 0;
 int BEING_RESET_BEFORE_SYNC = 0;
@@ -131,10 +141,6 @@ void* producer_thread(void* param)
   sync_egptr(pptr_val);
   // Only the producer thread writes to m_last_pptr (and well in sync_egptr).
   assert(m_last_pptr == pptr_val);
-  // Since m_next_egptr wasn't NULL, the value was also written to m_next_egptr.
-  // The consumer thread only writes to m_next_egptr when it is NULL.
-  // Therefore, m_next_egptr will also always be equal to pptr_val.
-  assert(m_next_egptr == pptr_val && 1);
 
   //-------------------------------------------------
 
@@ -160,9 +166,6 @@ void* producer_thread(void* param)
 
   // m_last_pptr wasn't changed by update_put_area.
   assert(m_last_pptr == pptr_val);
-  // Neither was m_next_egptr unless it was set to NULL because we are still being reset.
-  assert((PRODUCER_RESET_AFTER_ONE_BYTE && (m_next_egptr == NULL || m_next_egptr == pptr_val /* == block_start*/)) ||
-         (!PRODUCER_RESET_AFTER_ONE_BYTE && m_next_egptr == pptr_val /* == block_start + 1*/));
 
   // Write a second character to the buffer.
   *pptr_val = 'B';
@@ -173,12 +176,9 @@ void* producer_thread(void* param)
   sync_egptr(pptr_val);
   // Only the producer thread writes to m_last_pptr (and well in sync_egptr).
   assert(m_last_pptr == pptr_val);
-  assert(m_next_egptr == NULL || m_next_egptr == block_start || m_next_egptr == pptr_val);
 
   return NULL;
 }
-
-MemoryBlock some_value;
 
 void increment_total_read(streamsize n)
 {
@@ -187,22 +187,21 @@ void increment_total_read(streamsize n)
   atomic_store_explicit(&m_total_read, new_total_read, memory_order_release);
 }
 
-streamsize xsgetn_a(char* s /*, streamsize const n*/)   // Always try to read exactly one character.
+streamsize my_xsgetn_a(char* s, streamsize const n)
 {
   char* cur_gptr;
   streamsize available = 0;
 
   for (int loop = 0; available == 0 && loop < 2; ++loop)
   {
-    MemoryBlock* get_area_block_node = &some_value;
-    int at_end_and_has_next_block = update_get_area(&get_area_block_node, &cur_gptr, &available);
+    int at_end_and_has_next_block = update_get_area(&m_get_area_block_node, &cur_gptr, &available);
     // The gptr is entirely consumer thread side.
     // update_get_area might have updated it, but always returns the current gptr value.
     assert(cur_gptr == gptr_val);
     // This whole test only uses a single memory block. There is never a 'next' block.
     assert(!at_end_and_has_next_block);
     // Therefore, get_area_block_node is never updated to point to a 'next' block either.
-    assert(get_area_block_node == &some_value);
+    assert(m_get_area_block_node == &m_get_area_block_node_instance);
   }
 
   if (available == 0)
@@ -231,10 +230,10 @@ void* consumer_thread(void* param)
   // thread initiated a buffer reset, that only means the put area could be
   // reset to the beginning of the buffer in the mean time. The get area won't
   // be reset until the next call to update_get_area.
-  rlen = xsgetn_a(&read_buffer[0]);
+  rlen = my_xsgetn_a(&read_buffer[0], 1);
   assert(gptr_val == block_start + rlen);
 
-  rlen += xsgetn_a(&read_buffer[rlen]);
+  rlen += my_xsgetn_a(&read_buffer[rlen], 1);
 
   CONSUMER_RESET_AFTER_ONE_BYTE = rlen == 2 && gptr_val == block_start + 1;
 
@@ -264,17 +263,15 @@ int main()
   // We always do store_last_gptr after reading.
   assert(m_last_gptr == gptr_val);
   // Still available in the buffer. If we are in the middle of a reset then of course pptr and ggptr are out of sync.
-  assert((pptr_val - gptr_val == 2 - rlen) || m_next_egptr == NULL);
+  assert((pptr_val - gptr_val == 2 - rlen) || m_resetting);
   // The number of characters now in the buffer are those that weren't read.
   assert(get_data_size() == 2 - rlen);
 
-  // Check for sane values of m_total_reset and m_next_egptr.
+  // Check for sane values of m_total_reset.
   if (rlen == 2)
   {
     // At most one reset took place.
     assert(m_total_reset == 0 || m_total_reset == 1);
-    // m_next_egptr is fully up to date.
-    assert(m_next_egptr == pptr_val && rlen == 2);
 
     assert(read_buffer[0] == 'A');
     assert(read_buffer[1] == 'B');
@@ -283,9 +280,7 @@ int main()
   if (rlen == 1)
   {
     // At most one reset took place. If a reset is in progress than m_total_reset was already set to 1.
-    assert((m_total_reset == 0 && m_next_egptr != NULL) || m_total_reset == 1);
-    // If the reset finished then m_next_egptr is fully up to date.
-    assert(m_next_egptr == NULL || m_next_egptr == pptr_val);
+    assert((m_total_reset == 0 && !m_resetting) || m_total_reset == 1);
 
     assert(read_buffer[0] == 'A');
   }
@@ -294,8 +289,6 @@ int main()
   {
     // This would mean that both reads were done before any write. Therefore no reset took place.
     assert(m_total_reset == 0);
-    // m_next_egptr is fully up to date.
-    assert(m_next_egptr == pptr_val && rlen == 0);
   }
 
   return 0;

@@ -3,5 +3,6 @@
 
 /StreamBufConsumer::update_get_area/,/^}$/ {
   bodysub()
+  sub(/available/, "*available")
   print
 }

@@ -3,15 +3,14 @@ function bodysub() {
   sub(/StreamBufProducer::/, "")
   sub(/StreamBufConsumer::/, "")
   sub(/common\(\)\./, "")
-  sub(/cur_gptr/, "(*cur_gptr)");
-  sub(/char\*& \(\*cur_gptr\)/, "char** cur_gptr")
-  sub(/get_area_block_node/, "(*get_area_block_node)");
+  sub(/cur_gptr_ref/, "(*cur_gptr_ref)");
+  sub(/char\*& \(\*cur_gptr_ref\)/, "char** cur_gptr_ref")
+  $0 = gensub(/([^_])get_area_block_node/, "\\1(*get_area_block_node)", "g");
   sub(/MemoryBlock\*& \(\*get_area_block_node\)/, "MemoryBlock** get_area_block_node")
   gsub(/std::memory_order/, "memory_order")
   gsub(/std::streambuf::/, "")
   gsub(/std::streamsize/, "streamsize")
   sub(/streamsize&/, "streamsize")
-  sub(/available/, "*available")
   sub(/std::memory_order/, "memory_order")
   gsub(/nullptr/, "NULL")
   gsub(/bool/, "int")
