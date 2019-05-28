@@ -26,7 +26,7 @@ streamsize const m_total_allocated = block_end - block_start;
 
 // Common.
 _Atomic(char*) m_next_egptr = block_start;
-_Atomic(char*) m_next_egptr2 = uninitialized;   // The producer thread ONLY writes to this variable (pptr). The consumer thread ONLY reads it.
+_Atomic(char*) m_last_pptr = uninitialized;   // The producer thread ONLY writes to this variable (pptr). The consumer thread ONLY reads it.
 _Atomic(char*) m_last_gptr = block_start;       // The producer thread ONLY read this variable. The consumer thread ONLY writes to it (gptr).
 _Atomic(streamsize) m_total_read = 0;
 
@@ -129,8 +129,8 @@ void* producer_thread(void* param)
   //-------------------------------------------------
   // flush it.
   sync_egptr(pptr_val);
-  // Only the producer thread writes to m_next_egptr2 (and well in sync_egptr).
-  assert(m_next_egptr2 == pptr_val);
+  // Only the producer thread writes to m_last_pptr (and well in sync_egptr).
+  assert(m_last_pptr == pptr_val);
   // Since m_next_egptr wasn't NULL, the value was also written to m_next_egptr.
   // The consumer thread only writes to m_next_egptr when it is NULL.
   // Therefore, m_next_egptr will also always be equal to pptr_val.
@@ -158,8 +158,8 @@ void* producer_thread(void* param)
   assert((PRODUCER_RESET_AFTER_ONE_BYTE && pptr_val == block_start) ||
          (!PRODUCER_RESET_AFTER_ONE_BYTE && pptr_val == block_start + 1));
 
-  // m_next_egptr2 wasn't changed by update_put_area.
-  assert(m_next_egptr2 == pptr_val);
+  // m_last_pptr wasn't changed by update_put_area.
+  assert(m_last_pptr == pptr_val);
   // Neither was m_next_egptr unless it was set to NULL because we are still being reset.
   assert((PRODUCER_RESET_AFTER_ONE_BYTE && (m_next_egptr == NULL || m_next_egptr == pptr_val /* == block_start*/)) ||
          (!PRODUCER_RESET_AFTER_ONE_BYTE && m_next_egptr == pptr_val /* == block_start + 1*/));
@@ -171,8 +171,8 @@ void* producer_thread(void* param)
   //-------------------------------------------------
   // flush it.
   sync_egptr(pptr_val);
-  // Only the producer thread writes to m_next_egptr2 (and well in sync_egptr).
-  assert(m_next_egptr2 == pptr_val);
+  // Only the producer thread writes to m_last_pptr (and well in sync_egptr).
+  assert(m_last_pptr == pptr_val);
   assert(m_next_egptr == NULL || m_next_egptr == block_start || m_next_egptr == pptr_val);
 
   return NULL;
@@ -260,7 +260,7 @@ int main()
   // We wrote 2 bytes.
   assert(pptr_val == block_start + 2 - m_total_reset);
   // We always do a sync_egptr after writing.
-  assert(m_next_egptr2 == pptr_val);
+  assert(m_last_pptr == pptr_val);
   // We always do store_last_gptr after reading.
   assert(m_last_gptr == gptr_val);
   // Still available in the buffer. If we are in the middle of a reset then of course pptr and ggptr are out of sync.
