@@ -16,6 +16,7 @@ function bodysub() {
   gsub(/bool/, "int")
   gsub(/true/, "1")
   gsub(/false/, "0")
+  gsub(/AI_UNLIKELY/, "")
   $0 = gensub(/\(\*([a-zA-Z0-9_]*)\)->block_start\(\)/, "MemoryBlock_block_start(*\\1)", "g")
   $0 = gensub(/\(\*([a-zA-Z0-9_]*)\)->get_size\(\)/, "MemoryBlock_get_size(*\\1)", "g")
   $0 = gensub(/([a-zA-Z0-9_]*)\.load\(([^)]*)\)/, "atomic_load_explicit(\\&\\1, \\2)", "g")
