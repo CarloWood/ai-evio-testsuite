@@ -53,12 +53,14 @@ TEST(Socket, Constructor)
 
   try
   {
+    // Construct Timer before EventLoop, so that the EventLoop is destructed first!
+    // Otherwise the timer is destructed and cancelled before we even start to wait for it (in the destructor of event_loop).
+    threadpool::Timer timer;
     // Initialize the IO event loop thread.
     evio::EventLoop event_loop(queue_handle);
 
     // Start a listen socket on port 9001 that is closed after 10 seconds.
     static evio::SocketAddress const listen_address("0.0.0.0:9001");
-    threadpool::Timer timer;
     {
       auto listen_sock = evio::create<MyListenSocket>();
       listen_sock->listen(listen_address);
