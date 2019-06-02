@@ -13,8 +13,9 @@
 #include "test_IODevice.h"
 #include "test_InputDecoder.h"
 #include "test_OutputStream.h"
-#endif
 #include "test_StreamBuf.h"
+#endif
+#include "test_Socket.h"
 
 using namespace boost::program_options;
 

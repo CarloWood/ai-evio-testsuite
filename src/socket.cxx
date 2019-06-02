@@ -44,7 +44,7 @@ int main()
 {
   Debug(NAMESPACE_DEBUG::init());
 
-  // Create a thread pool of 2 threads.
+  // Create a thread pool.
   AIThreadPool thread_pool;
   [[maybe_unused]] AIQueueHandle high_priority_handler = thread_pool.new_queue(32);
   AIQueueHandle low_priority_handler = thread_pool.new_queue(16);
