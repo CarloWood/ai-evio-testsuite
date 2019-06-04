@@ -42,6 +42,56 @@ class MyListenSocket : public evio::ListenSocket<MyAcceptedSocket>
   }
 };
 
+class MySocket : public evio::Socket
+{
+ public:
+  using VT_type = Socket::VT_type;
+
+  struct VT_impl : Socket::VT_impl
+  {
+    // Override
+    static void connected(Socket* _self, bool CWDEBUG_ONLY(success))
+    {
+      MySocket* self = static_cast<MySocket*>(_self);
+      Dout(dc::notice, (success ? "*** CONNECTED ***" : "*** FAILED TO CONNECT ***"));
+      self->m_connected = true;
+      // By immediately disconnecting again we cause a connection reset by peer on the otherside,
+      // which causes MyAcceptedSocket::read_returned_zero() to be called. See above.
+      self->close();
+    }
+
+    static constexpr VT_type VT{
+      /*Socket*/
+        /*InputDevice*/
+      { nullptr,
+        read_from_fd,
+        read_returned_zero,
+        read_error,
+        data_received },
+        /*OutputDevice*/
+      { nullptr,
+        write_to_fd,
+        write_error },
+      connected,
+      disconnected
+    };
+  };
+
+  // Make a deep copy of VT_ptr.
+  VT_type* clone_VT() override { return VT_ptr.clone(this); }
+
+  utils::VTPtr<MySocket, Socket> VT_ptr;
+
+ private:
+  bool m_connected;
+  MyDecoder m_decoder;
+
+ public:
+  MySocket() : VT_ptr(this), m_connected(false) { Dout(dc::notice, "MySocket::VT has address: " << (void*)&VT_impl::VT); }
+  ~MySocket() { ASSERT(m_connected); }
+};
+
+
 template<threadpool::Timer::time_point::rep count, typename Unit> using Interval = threadpool::Interval<count, Unit>;
 
 TEST(Socket, Constructor)
@@ -71,6 +121,17 @@ TEST(Socket, Constructor)
             listen_sock->close();
             evio::EventLoopThread::instance().bump_terminate();
           });
+    }
+
+    // Dumb way to wait until the listen socket is up.
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    MyDecoder decoder;
+    {
+      // Connect a socket to the listen socket.
+      auto socket = evio::create<MySocket>();
+      socket->input(decoder);
+      socket->connect(listen_address);
     }
 
     event_loop.join();
