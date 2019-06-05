@@ -14,3 +14,4 @@ ltmain.sh
 missing
 test-driver
 genmc_all.c
+tests/.gdbinit
