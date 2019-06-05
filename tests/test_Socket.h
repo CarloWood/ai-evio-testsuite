@@ -1,6 +1,8 @@
 #include "evio/ListenSocket.h"
 #include "threadpool/Timer.h"
+#ifdef CWDEBUG
 #include <libcwd/buf2str.h>
+#endif
 
 class MyDecoder : public evio::InputDecoder
 {
@@ -9,6 +11,7 @@ class MyDecoder : public evio::InputDecoder
 
  public:
   MyDecoder() : m_received(0) { }
+  ~MyDecoder() { Dout(dc::notice, "~MyDecoder() [" << this << "]"); }
 
  protected:
   evio::RefCountReleaser decode(evio::MsgBlock&& msg, evio::GetThread type) override;
@@ -26,23 +29,55 @@ class MyAcceptedSocket : public evio::Socket
     input(m_input);
     output(m_output);
   }
+  ~MyAcceptedSocket() { Dout(dc::notice, "~MyAcceptedSocket() [" << this << "]"); }
 
   evio::OutputStream& operator()() { return m_output; }
 };
 
 class MyListenSocket : public evio::ListenSocket<MyAcceptedSocket>
 {
- protected:
-  void new_connection(accepted_socket_type& accepted_socket)
+ public:
+  using VT_type = evio::ListenSocket<MyAcceptedSocket>::VT_type;
+
+  struct VT_impl : evio::ListenSocket<MyAcceptedSocket>::VT_impl
   {
-    Dout(dc::notice, "New connection to listen socket was accepted. Sending 10 kb of data.");
-    // Write 10 kbyte of data.
-    for (int n = 0; n < 100; ++n)
-      accepted_socket() << "START012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789THEEND" << std::endl;
-  }
+    // Override
+    static void new_connection(ListenSocket* UNUSED_ARG(self), accepted_socket_type& accepted_socket)
+    {
+      //MyListenSocket* self = static_cast<MyListenSocket*>(_self);
+      Dout(dc::notice, "New connection to listen socket was accepted. Sending 10 kb of data.");
+      // Write 10 kbyte of data.
+      for (int n = 0; n < 1000; ++n)
+        accepted_socket() << "START012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789THEEND\n";
+      accepted_socket() << std::flush;
+    }
+
+    // Virtual table of MyListenSocket.
+    static constexpr VT_type VT{
+      /*ListenSocket*/
+        /*ListenSocketDevice*/
+      {   /*InputDevice*/
+        { nullptr,
+          read_from_fd,
+          read_returned_zero,
+          read_error,
+          data_received },
+        maybe_out_of_fds,
+        spawn_accepted },
+      new_connection            // Overridden
+    };
+  };
+
+  // Make a deep copy of VT_ptr.
+  VT_type* clone_VT() override { return VT_ptr.clone(this); }
+
+  utils::VTPtr<MyListenSocket, evio::ListenSocket<MyAcceptedSocket>> VT_ptr;
+
+  MyListenSocket() : VT_ptr(this) { }
+  ~MyListenSocket() { Dout(dc::notice, "~MyListenSocket() [" << this << "]"); }
 };
 
-class MySocket : public evio::Socket
+class MyClientSocket : public evio::Socket
 {
  public:
   using VT_type = Socket::VT_type;
@@ -50,14 +85,12 @@ class MySocket : public evio::Socket
   struct VT_impl : Socket::VT_impl
   {
     // Override
-    static void connected(Socket* _self, bool CWDEBUG_ONLY(success))
+    static void connected(Socket* _self, bool DEBUG_ONLY(success))
     {
-      MySocket* self = static_cast<MySocket*>(_self);
+      MyClientSocket* self = static_cast<MyClientSocket*>(_self);
       Dout(dc::notice, (success ? "*** CONNECTED ***" : "*** FAILED TO CONNECT ***"));
+      ASSERT((self->m_connected_flags & (is_connected|is_disconnected)) == (success ? is_connected : is_disconnected));
       self->m_connected = true;
-      // By immediately disconnecting again we cause a connection reset by peer on the otherside,
-      // which causes MyAcceptedSocket::read_returned_zero() to be called. See above.
-      self->close();
     }
 
     static constexpr VT_type VT{
@@ -80,17 +113,15 @@ class MySocket : public evio::Socket
   // Make a deep copy of VT_ptr.
   VT_type* clone_VT() override { return VT_ptr.clone(this); }
 
-  utils::VTPtr<MySocket, Socket> VT_ptr;
+  utils::VTPtr<MyClientSocket, Socket> VT_ptr;
 
  private:
   bool m_connected;
-  MyDecoder m_decoder;
 
  public:
-  MySocket() : VT_ptr(this), m_connected(false) { Dout(dc::notice, "MySocket::VT has address: " << (void*)&VT_impl::VT); }
-  ~MySocket() { ASSERT(m_connected); }
+  MyClientSocket() : VT_ptr(this), m_connected(false) { Dout(dc::notice, "MyClientSocket::VT has address: " << (void*)&VT_impl::VT); }
+  ~MyClientSocket() { Dout(dc::notice, "~MyClientSocket() [" << this << "]"); ASSERT(m_connected); }
 };
-
 
 template<threadpool::Timer::time_point::rep count, typename Unit> using Interval = threadpool::Interval<count, Unit>;
 
@@ -106,6 +137,9 @@ TEST(Socket, Constructor)
     // Construct Timer before EventLoop, so that the EventLoop is destructed first!
     // Otherwise the timer is destructed and cancelled before we even start to wait for it (in the destructor of event_loop).
     threadpool::Timer timer;
+    // Also construct the decoder *before* the EventLoop! Or it will be destructed before it is being used.
+    MyDecoder decoder;
+
     // Initialize the IO event loop thread.
     evio::EventLoop event_loop(queue_handle);
 
@@ -114,7 +148,7 @@ TEST(Socket, Constructor)
     {
       auto listen_sock = evio::create<MyListenSocket>();
       listen_sock->listen(listen_address);
-      timer.start(Interval<10, std::chrono::seconds>(),
+      timer.start(Interval<1, std::chrono::seconds>(),
           [&timer, listen_sock]()
           {
             timer.release_callback();
@@ -124,13 +158,12 @@ TEST(Socket, Constructor)
     }
 
     // Dumb way to wait until the listen socket is up.
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-    MyDecoder decoder;
     {
       // Connect a socket to the listen socket.
-      auto socket = evio::create<MySocket>();
-      socket->input(decoder);
+      auto socket = evio::create<MyClientSocket>();
+      socket->output(socket, 1024, 4096, 1000000);
       socket->connect(listen_address);
     }
 
@@ -148,8 +181,9 @@ evio::RefCountReleaser MyDecoder::decode(evio::MsgBlock&& msg, evio::GetThread)
   // Just print what was received.
   DoutEntering(dc::notice, "MyDecoder::decode(\"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
   m_received += msg.get_size();
+  Dout(dc::notice, "m_received = " << m_received);
   // Stop when the last message was received.
-  if (m_received == 10200)
+  if (m_received == 102000)
     need_allow_deletion = stop_input_device();
   return need_allow_deletion;
 }

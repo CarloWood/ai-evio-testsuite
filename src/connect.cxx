@@ -81,10 +81,11 @@ class MySocket : public Socket
   struct VT_impl : Socket::VT_impl
   {
     // Override
-    static void connected(Socket* _self, bool CWDEBUG_ONLY(success))
+    static void connected(Socket* _self, bool DEBUG_ONLY(success))
     {
       MySocket* self = static_cast<MySocket*>(_self);
       Dout(dc::notice, (success ? "*** CONNECTED ***" : "*** FAILED TO CONNECT ***"));
+      ASSERT((self->m_connected_flags & (is_connected|is_disconnected)) == (success ? is_connected : is_disconnected));
       self->m_connected = true;
       // By immediately disconnecting again we cause a connection reset by peer on the otherside,
       // which causes MyAcceptedSocket::read_returned_zero() to be called. See above.
