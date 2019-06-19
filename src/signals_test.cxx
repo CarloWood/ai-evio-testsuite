@@ -5,6 +5,7 @@
 #include "utils/cpu_relax.h"
 #include <thread>
 #include <chrono>
+#include <atomic>
 #include <sys/epoll.h>
 
 using utils::Signals;
@@ -49,7 +50,7 @@ void thread2(int sn2, int sn3)
   struct epoll_event s_events[maxevents];
   std::this_thread::sleep_for(std::chrono::milliseconds(2000));
   Dout(dc::notice|flush_cf|continued_cf, "Entering epoll_pwait() = ");
-  int ready = epoll_pwait(epoll_fd, s_events, maxevents, -1, &pwait_sigmask);
+  CWDEBUG_ONLY(int ready =) epoll_pwait(epoll_fd, s_events, maxevents, -1, &pwait_sigmask);
   Dout(dc::finish|cond_error_cf(ready == -1), ready);
 
   Dout(dc::notice, "Leaving thread2.");
