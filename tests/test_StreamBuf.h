@@ -32,13 +32,18 @@ class StreamBuf_OutputDevice : public evio::OutputDevice
     return evio::OutputDevice::stop_output_device();
   }
 
+  void init(int fd)
+  {
+    evio::OutputDevice::init(fd);
+  }
+
  protected:
   int sync() override { m_sync_called = true; return evio::OutputDevice::sync(); }
 
  public:
   void reset_sync_called() { m_sync_called = false; }
   bool sync_called() const { return m_sync_called; }
-  void set_dont_close() { m_flags |= INTERNAL_FDS_DONT_CLOSE; }
+  void set_dont_close() { state_t::wat(m_state)->m_flags.set_dont_close(); }
 };
 
 class OutputBufferFixture : public testing::Test
@@ -311,7 +316,8 @@ class StreamBuf_InputDevice : public evio::InputDevice
 {
  public:
   evio::InputBuffer* get_ibuffer() const { return m_ibuffer; }
-  void set_dont_close() { m_flags |= INTERNAL_FDS_DONT_CLOSE; }
+  void set_dont_close() { state_t::wat(m_state)->m_flags.set_dont_close(); }
+  void init(int fd) { evio::InputDevice::init(fd); }
 };
 
 class StreamBuf_InputDecoder : public evio::InputDecoder
@@ -319,9 +325,9 @@ class StreamBuf_InputDecoder : public evio::InputDecoder
  public:
   using evio::InputDecoder::InputDecoder;
 
-  evio::RefCountReleaser decode(evio::MsgBlock&& CWDEBUG_ONLY(msg), evio::GetThread UNUSED_ARG(type)) override
+  evio::RefCountReleaser decode(evio::MsgBlock&& CWDEBUG_ONLY(msg)) override
   {
-    DoutEntering(dc::notice, "StreamBuf_InputDecoder::decode(\"" << libcwd::buf2str(msg.get_start(), msg.get_size()) << "\", type)");
+    DoutEntering(dc::notice, "StreamBuf_InputDecoder::decode(\"" << libcwd::buf2str(msg.get_start(), msg.get_size()) << "\")");
     return {};
   }
 };

@@ -40,6 +40,8 @@ class Socket : public evio::InputDevice, public evio::OutputDevice
       /*InputDevice*/
     { nullptr,
       read_from_fd,
+      hup,
+      exceptional,
       read_returned_zero,
       read_error,
       data_received },
@@ -142,11 +144,11 @@ void Socket::connect_to_server(char const* remote_host, int remote_port)
     Dout(dc::notice, "\"Connected\".");
 
   init(fd_remote);
-  evio::SingleThread type;
+  state_t::wat state_w(m_state);
   // This class does not use input/output buffers but directly overrides read_from_fd and write_to_fd.
   // Therefore it is not necessary to call input() and output().
-  start_input_device(type);
-  start_output_device(type);
+  start_input_device(state_w);
+  start_output_device(state_w);
 }
 
 // Read thread.
@@ -154,7 +156,6 @@ void Socket::VT_impl::read_from_fd(evio::InputDevice* _self, int fd)
 {
   DoutEntering(dc::notice, "Socket::read_from_fd(" << fd << ")");
   Socket* self = static_cast<Socket*>(_self);
-  evio::RefCountReleaser need_allow_deletion;
   char buf[256];
   ssize_t len;
   do
@@ -164,7 +165,7 @@ void Socket::VT_impl::read_from_fd(evio::InputDevice* _self, int fd)
     Dout(dc::finish|cond_error_cf(len == -1), len);
     if (len == -1)
     {
-      need_allow_deletion = self->evio::InputDevice::close();
+      self->evio::InputDevice::close();
       return;
     }
     Dout(dc::notice, "Read: \"" << libcwd::buf2str(buf, len) << "\".");
@@ -172,8 +173,8 @@ void Socket::VT_impl::read_from_fd(evio::InputDevice* _self, int fd)
   while (len == 256);
   if (strncmp(buf + len - 17, "#5</body></html>\n", 17) == 0)
   {
-    need_allow_deletion += self->stop_input_device();
-    ev_break(EV_A_ EVBREAK_ALL);
+    self->stop_input_device();
+    evio::EventLoopThread::instance().stop_running();
   }
 }
 

@@ -11,7 +11,7 @@ libgtest_la_CXXFLAGS = -I$(top_srcdir)/googletest/googletest/include -I$(top_src
 
 gtest_SOURCES = gtest.cxx
 gtest_CXXFLAGS = -I$(top_srcdir)/googletest/googletest/include -I$(top_srcdir)/googletest/googlemock/include @LIBCWD_R_FLAGS@
-gtest_LDADD = ../evio/libevio.la ../threadpool/libthreadpool.la ../threadsafe/libthreadsafe.la ../utils/libutils_r.la ../evio/libev-4.24/libev.la libgtest.la ../cwds/libcwds_r.la -lboost_program_options -lboost_system
+gtest_LDADD = ../evio/libevio.la ../threadpool/libthreadpool.la ../threadsafe/libthreadsafe.la ../utils/libutils_r.la libgtest.la ../cwds/libcwds_r.la -lboost_program_options -lboost_system
 
 TESTS = gtest
 

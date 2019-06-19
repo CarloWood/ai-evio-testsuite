@@ -2,7 +2,8 @@
 #include <netinet/in.h>
 #include <sys/un.h>
 
-TEST(inet_support, size_of_addr) {
+TEST(inet_support, size_of_addr)
+{
   // Preparation.
   struct sockaddr_in sin;
   struct sockaddr_in6 sin6;

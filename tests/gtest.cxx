@@ -10,12 +10,14 @@
 #include "test_SocketAddress.h"
 #include "test_RefCountReleaser.h"
 #include "test_FileDescriptor.h"
+#endif
 #include "test_IODevice.h"
+#if 0
 #include "test_InputDecoder.h"
 #include "test_OutputStream.h"
 #include "test_StreamBuf.h"
 #endif
-#include "test_Socket.h"
+//#include "test_Socket.h"
 
 using namespace boost::program_options;
 

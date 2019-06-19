@@ -1,5 +1,8 @@
 #include "evio/ListenSocket.h"
+#include "evio/EventLoopThread.h"
 #include "threadpool/Timer.h"
+#include "threadpool/AIThreadPool.h"
+#include "utils/AISignals.h"
 #ifdef CWDEBUG
 #include <libcwd/buf2str.h>
 #endif
@@ -14,7 +17,7 @@ class MyDecoder : public evio::InputDecoder
   ~MyDecoder() { Dout(dc::notice, "~MyDecoder() [" << this << "]"); }
 
  protected:
-  evio::RefCountReleaser decode(evio::MsgBlock&& msg, evio::GetThread type) override;
+  evio::RefCountReleaser decode(evio::MsgBlock&& msg) override;
 };
 
 class MyAcceptedSocket : public evio::Socket
@@ -42,14 +45,14 @@ class MyListenSocket : public evio::ListenSocket<MyAcceptedSocket>
   struct VT_impl : evio::ListenSocket<MyAcceptedSocket>::VT_impl
   {
     // Override
-    static void new_connection(ListenSocket* UNUSED_ARG(self), accepted_socket_type& accepted_socket)
+    static void new_connection(ListenSocket* self, accepted_socket_type& accepted_socket)
     {
-      //MyListenSocket* self = static_cast<MyListenSocket*>(_self);
       Dout(dc::notice, "New connection to listen socket was accepted. Sending 10 kb of data.");
       // Write 10 kbyte of data.
       for (int n = 0; n < 1000; ++n)
         accepted_socket() << "START012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789THEEND\n";
       accepted_socket() << std::flush;
+      self->close();
     }
 
     // Virtual table of MyListenSocket.
@@ -59,6 +62,8 @@ class MyListenSocket : public evio::ListenSocket<MyAcceptedSocket>
       {   /*InputDevice*/
         { nullptr,
           read_from_fd,
+          hup,
+          exceptional,
           read_returned_zero,
           read_error,
           data_received },
@@ -98,6 +103,8 @@ class MyClientSocket : public evio::Socket
         /*InputDevice*/
       { nullptr,
         read_from_fd,
+        hup,
+        exceptional,
         read_returned_zero,
         read_error,
         data_received },
@@ -127,6 +134,10 @@ template<threadpool::Timer::time_point::rep count, typename Unit> using Interval
 
 TEST(Socket, Constructor)
 {
+  // Initialize signals.
+  AISignals signals({SIGINT, SIGPIPE});
+  signals.default_handler(SIGINT);
+
   // Create a thread pool.
   AIThreadPool thread_pool;
   // Create a new queue with a capacity of 32 and default priority.
@@ -136,7 +147,7 @@ TEST(Socket, Constructor)
   {
     // Construct Timer before EventLoop, so that the EventLoop is destructed first!
     // Otherwise the timer is destructed and cancelled before we even start to wait for it (in the destructor of event_loop).
-    threadpool::Timer timer;
+//    threadpool::Timer timer;
     // Also construct the decoder *before* the EventLoop! Or it will be destructed before it is being used.
     MyDecoder decoder;
 
@@ -148,13 +159,15 @@ TEST(Socket, Constructor)
     {
       auto listen_sock = evio::create<MyListenSocket>();
       listen_sock->listen(listen_address);
-      timer.start(Interval<1, std::chrono::seconds>(),
+#if 0
+      timer.start(Interval<10, std::chrono::seconds>(),
           [&timer, listen_sock]()
           {
             timer.release_callback();
             listen_sock->close();
             evio::EventLoopThread::instance().bump_terminate();
           });
+#endif
     }
 
     // Dumb way to wait until the listen socket is up.
@@ -163,7 +176,8 @@ TEST(Socket, Constructor)
     {
       // Connect a socket to the listen socket.
       auto socket = evio::create<MyClientSocket>();
-      socket->output(socket, 1024, 4096, 1000000);
+      //socket->output(socket, 1024 - 32, 4096, 1000000);
+      socket->input(decoder, 1024 - 32, 4096, 1000000);
       socket->connect(listen_address);
     }
 
@@ -175,15 +189,15 @@ TEST(Socket, Constructor)
   }
 }
 
-evio::RefCountReleaser MyDecoder::decode(evio::MsgBlock&& msg, evio::GetThread)
+evio::RefCountReleaser MyDecoder::decode(evio::MsgBlock&& msg)
 {
-  evio::RefCountReleaser need_allow_deletion;
   // Just print what was received.
   DoutEntering(dc::notice, "MyDecoder::decode(\"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
   m_received += msg.get_size();
   Dout(dc::notice, "m_received = " << m_received);
   // Stop when the last message was received.
+  evio::RefCountReleaser needs_allow_deletion;
   if (m_received == 102000)
-    need_allow_deletion = stop_input_device();
-  return need_allow_deletion;
+    needs_allow_deletion = close_input_device();
+  return needs_allow_deletion;
 }

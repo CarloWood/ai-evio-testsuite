@@ -32,7 +32,7 @@ class MyDecoder : public InputDecoder
   MyDecoder() : m_received(0) { }
 
  protected:
-  RefCountReleaser decode(MsgBlock&& msg, GetThread type) override;
+  RefCountReleaser decode(MsgBlock&& msg) override;
 };
 
 class MyAcceptedSocket : public Socket
@@ -143,14 +143,13 @@ int main()
   Dout(dc::notice, "Leaving main...");
 }
 
-evio::RefCountReleaser MyDecoder::decode(MsgBlock&& msg, GetThread)
+evio::RefCountReleaser MyDecoder::decode(MsgBlock&& msg)
 {
-  RefCountReleaser need_allow_deletion;
   // Just print what was received.
   DoutEntering(dc::notice, "MyDecoder::decode(\"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
   m_received += msg.get_size();
   // Stop when the last message was received.
   if (m_received == 10200)
-    need_allow_deletion = stop_input_device();
-  return need_allow_deletion;
+    stop_input_device();
+  return {};
 }

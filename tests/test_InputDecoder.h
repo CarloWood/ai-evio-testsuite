@@ -7,7 +7,8 @@
 #include <cstdlib>
 #include <fcntl.h>      // O_CLOEXEC
 
-TEST(InputDecoder, default_input_blocksize_c) {
+TEST(InputDecoder, default_input_blocksize_c)
+{
   Dout(dc::notice, "default_input_blocksize_c = " << evio::default_input_blocksize_c);
   size_t const requested_size = sizeof(evio::MemoryBlock) + evio::default_input_blocksize_c;
   size_t const alloc_size = utils::malloc_size(requested_size);
@@ -19,6 +20,11 @@ class MyInputDevice : public evio::InputDevice
 {
  public:
   evio::InputBuffer* get_ibuffer() const { return m_ibuffer; }
+
+  void init(int fd)
+  {
+    evio::InputDevice::init(fd);
+  }
 };
 
 class MyInputDecoder : public evio::InputDecoder
@@ -26,20 +32,20 @@ class MyInputDecoder : public evio::InputDecoder
  public:
   using evio::InputDecoder::InputDecoder;
 
-  evio::RefCountReleaser decode(evio::MsgBlock&& CWDEBUG_ONLY(msg), evio::GetThread UNUSED_ARG(type)) override
+  evio::RefCountReleaser decode(evio::MsgBlock&& CWDEBUG_ONLY(msg)) override
   {
-    DoutEntering(dc::notice, "MyInputDecoder::decode(\"" << libcwd::buf2str(msg.get_start(), msg.get_size()) << "\", type)");
+    DoutEntering(dc::notice, "MyInputDecoder::decode(\"" << libcwd::buf2str(msg.get_start(), msg.get_size()) << "\")");
     return {};
   }
 
-  void start_input_device(evio::GetThread type)
+  void start_input_device()
   {
-    evio::InputDecoder::start_input_device(type);
+    evio::InputDecoder::start_input_device();
   }
 
-  evio::RefCountReleaser stop_input_device()
+  void stop_input_device()
   {
-    return evio::InputDecoder::stop_input_device();
+    evio::InputDecoder::stop_input_device();
   }
 
   size_t end_of_msg_finder(char const* new_data, size_t rlen) override
@@ -48,7 +54,8 @@ class MyInputDecoder : public evio::InputDecoder
   }
 };
 
-TEST(InputDecoder, create_buffer) {
+TEST(InputDecoder, create_buffer)
+{
   // Create a test InputDevice.
   auto input_device = evio::create<MyInputDevice>();
 
@@ -91,9 +98,9 @@ TEST(InputDecoder, create_buffer) {
     // Sanity check.
     EXPECT_TRUE(input_device->is_active(type).is_false());
 
-    // Verify that a call to start_input_device now calls m_input_device->start_input_device(type).
-    decoder.start_input_device(type);
-    EXPECT_TRUE(input_device->is_active(type).is_transitory_true());
+    // Verify that a call to start_input_device now calls m_input_device->start_input_device().
+    decoder.start_input_device();
+    EXPECT_TRUE(input_device->is_active().is_transitory_true());
 
     // Likewise when calling stop_input_device().
     evio::RefCountReleaser allow_deletion = decoder.stop_input_device();
@@ -112,7 +119,8 @@ TEST(InputDecoder, create_buffer) {
   input_device->close_input_device();
 }
 
-TEST(InputDecoder, end_of_msg_finder) {
+TEST(InputDecoder, end_of_msg_finder)
+{
   MyInputDecoder decoder;
 
   char const* test_msgs[] = {

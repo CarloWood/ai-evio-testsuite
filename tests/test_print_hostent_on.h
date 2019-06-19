@@ -5,7 +5,8 @@ extern int h_errno;
 
 using ::testing::MatchesRegex;
 
-TEST(inet_support, print_hostent_on) {
+TEST(inet_support, print_hostent_on)
+{
   // Preperation.
   char const* host_name = "www.yahoo.com";
   // Suppress debug output

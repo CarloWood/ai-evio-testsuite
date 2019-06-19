@@ -24,7 +24,7 @@ using evio::GetThread;
 class InputPrinter : public InputDecoder
 {
  protected:
-  RefCountReleaser decode(MsgBlock&& msg, GetThread) override;
+  RefCountReleaser decode(MsgBlock&& msg) override;
 };
 
 class MySocket : public Socket
@@ -114,13 +114,12 @@ int main()
   event_loop.join();
 }
 
-RefCountReleaser InputPrinter::decode(MsgBlock&& msg, GetThread)
+RefCountReleaser InputPrinter::decode(MsgBlock&& msg)
 {
-  RefCountReleaser need_allow_deletion;
   // Just print what was received.
   DoutEntering(dc::notice, "InputPrinter::decode(\"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
   // Stop when the last message was received.
   if (msg.get_size() >= 17 && strncmp(msg.get_start() + msg.get_size() - 17, "#5</body></html>\n", 17) == 0)
-    need_allow_deletion = stop_input_device();
-  return need_allow_deletion;
+    stop_input_device();
+  return {};
 }

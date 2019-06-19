@@ -121,10 +121,12 @@ static void run_test(snd_or_rcv what)
   }
 }
 
-TEST(inet_support, set_sndsockbuf) {
+TEST(inet_support, set_sndsockbuf)
+{
   CALL(run_test(sndbuf));
 }
 
-TEST(inet_support, set_rcvsockbuf) {
+TEST(inet_support, set_rcvsockbuf)
+{
   CALL(run_test(rcvbuf));
 }

@@ -13,27 +13,35 @@ class FileDescriptor : public virtual evio::FileDescriptor
 {
  private:
   static int s_instance_count;
+  int m_fd;
 
  protected:
   bool m_closed_called;
 
   void set_dont_close()
   {
-    m_flags |= INTERNAL_FDS_DONT_CLOSE;
+    state_t::wat(m_state)->m_flags.set_dont_close();
   }
 
  public:
-  FileDescriptor() : m_closed_called(false) { ++s_instance_count; }
+  FileDescriptor() : m_fd(-1), m_closed_called(false) { ++s_instance_count; }
   ~FileDescriptor() { --s_instance_count; }
 
-  void test_input_fd_is_minus_one() const
+  void tell_testsuite_fd(int fd)
   {
-    EXPECT_EQ(get_input_fd(), -1);
+    m_fd = fd;
   }
 
-  void test_output_fd_is_minus_one() const
+  void test_fd_is_minus_one() const
   {
-    EXPECT_EQ(get_output_fd(), -1);
+    ASSERT(m_fd == -1);
+    EXPECT_EQ(get_fd(), m_fd);
+  }
+
+  void test_fd_is_set() const
+  {
+    ASSERT(m_fd != -1);
+    EXPECT_EQ(get_fd(), m_fd);
   }
 
   void test_close_input_device_does_nothing()
@@ -70,9 +78,6 @@ class FileDescriptor : public virtual evio::FileDescriptor
     EXPECT_EQ(s_instance_count, 0);
   }
 
-  virtual bool test_valid_input_fd(bool UNUSED_ARG(expected)) const { return true; }
-  virtual bool test_valid_output_fd(bool UNUSED_ARG(expected)) const { return true; }
-
  protected:
   // Event: the filedescriptor(s) of this device were just closed (close_fds() was called).
   // If INTERNAL_FDS_DONT_CLOSE is set then the fd(s) weren't really closed, but this method is still called.
@@ -81,12 +86,15 @@ class FileDescriptor : public virtual evio::FileDescriptor
   {
     EXPECT_FALSE(m_closed_called);
     m_closed_called = true;
-    EXPECT_TRUE(is_dead());
-    bool dont_close = m_flags & INTERNAL_FDS_DONT_CLOSE;
-    EXPECT_TRUE(test_valid_input_fd(dont_close));         // Expect the fd(s) to still be valid iff dont_close.
-    EXPECT_TRUE(test_valid_output_fd(dont_close));
-    return evio::RefCountReleaser();
+    state_t::wat state_w(m_state);
+    EXPECT_TRUE(state_w->m_flags.is_dead());
+    bool dont_close = state_w->m_flags.dont_close();
+    EXPECT_TRUE(evio::is_valid(m_fd) == dont_close);
+    return {};
   }
+
+ public:
+  evio::FileDescriptorFlags const get_flags() { return evio::FileDescriptor::get_flags(); }
 };
 
 //static
@@ -94,22 +102,7 @@ int FileDescriptor::s_instance_count;
 
 class TestInputDevice : public evio::InputDevice, public FileDescriptor
 {
- private:
-  int m_input_fd;
-
  public:
-  TestInputDevice() : m_input_fd(-1) { }
-
-  void tell_testsuite_input_fd(int fd)
-  {
-    m_input_fd = fd;
-  }
-
-  void test_input_fd_is_set() const
-  {
-    EXPECT_EQ(get_input_fd(), m_input_fd);
-  }
-
   void test_close_input_device_closes_fd(bool started);
   void test_close_closes_input_fd(bool started);
   void test_disable_input_device(bool started, bool close);
@@ -120,40 +113,18 @@ class TestInputDevice : public evio::InputDevice, public FileDescriptor
     auto device = evio::create<TestInputDevice>();
     int fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
     device->init(fd);
-    evio::SingleThread type;
     if (dont_close)
       device->set_dont_close();
-    device->tell_testsuite_input_fd(fd);
+    device->tell_testsuite_fd(fd);
     if (start_it)
-      device->start_input_device(type);
+      device->start_input_device(state_t::wat(device->m_state));
     return device;
-  }
-
- private:
-  bool test_valid_input_fd(bool expected) const override
-  {
-    return evio::is_valid(m_input_fd) == expected;
   }
 };
 
 class TestOutputDevice : public evio::OutputDevice, public FileDescriptor
 {
- private:
-  int m_output_fd;
-
  public:
-  TestOutputDevice() : m_output_fd(-1) { }
-
-  void tell_testsuite_output_fd(int fd)
-  {
-    m_output_fd = fd;
-  }
-
-  void test_output_fd_is_set() const
-  {
-    EXPECT_EQ(get_output_fd(), m_output_fd);
-  }
-
   void test_close_output_device_closes_fd(bool started);
   void test_close_closes_output_fd(bool started);
   void test_disable_output_device(bool started, bool close);
@@ -164,22 +135,15 @@ class TestOutputDevice : public evio::OutputDevice, public FileDescriptor
     auto device = evio::create<TestOutputDevice>();
     int fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
     device->init(fd);
-    evio::SingleThread type;
     if (dont_close)
       device->set_dont_close();
     int val = fcntl(fd, F_GETFL);
     ASSERT(val != -1);
     EXPECT_TRUE(!!(val & O_NONBLOCK));  // Should be set to non-blocking after call to init().
-    device->tell_testsuite_output_fd(fd);
+    device->tell_testsuite_fd(fd);
     if (start_it)
-      device->start_output_device(type);
+      device->start_output_device();
     return device;
-  }
-
- private:
-  bool test_valid_output_fd(bool expected) const override
-  {
-    return evio::is_valid(m_output_fd) == expected;
   }
 };
 
@@ -300,7 +264,8 @@ static int open_a_fd(int type)
   return fd;
 }
 
-TEST(FileDescriptor, is_valid) {
+TEST(FileDescriptor, is_valid)
+{
   EXPECT_TRUE(evio::is_valid(STDIN_FILENO));
   EXPECT_TRUE(evio::is_valid(STDOUT_FILENO));
   EXPECT_TRUE(evio::is_valid(STDERR_FILENO));
@@ -354,7 +319,8 @@ TEST(FileDescriptor, is_valid) {
 //-----------------------------------------------------------------------------
 // FileDescriptor.DefaultConstructor
 
-TEST(FileDescriptor, DefaultConstructor) {
+TEST(FileDescriptor, DefaultConstructor)
+{
   CALL(FileDescriptor::reset_instance_count());
   {
     // FileDescriptor is derived from utils::AIRefCount and therefore
@@ -363,24 +329,23 @@ TEST(FileDescriptor, DefaultConstructor) {
     EXPECT_TRUE((std::is_same<decltype(fd1), boost::intrusive_ptr<FileDescriptor>>::value));
 
     // Test all public member functions, for a default constructed FileDescriptor.
-    EXPECT_FALSE(fd1->writable_type());
-    EXPECT_FALSE(fd1->readable_type());
-    EXPECT_FALSE(fd1->is_writable());
-    EXPECT_FALSE(fd1->is_readable());
-    EXPECT_FALSE(fd1->dont_close());
-    EXPECT_FALSE(fd1->is_open());
-    EXPECT_FALSE(fd1->is_open_w());
-    EXPECT_FALSE(fd1->is_open_r());
-    EXPECT_FALSE(fd1->is_dead());
-    EXPECT_FALSE(fd1->is_disabled());
-#ifdef CWDEBUG
-    EXPECT_FALSE(fd1->is_debug_channel());
-#endif
+    EXPECT_FALSE(fd1->get_flags().is_output_device());
+    EXPECT_FALSE(fd1->get_flags().is_input_device());
+    EXPECT_FALSE(fd1->get_flags().is_writable());
+    EXPECT_FALSE(fd1->get_flags().is_readable());
+    EXPECT_FALSE(fd1->get_flags().dont_close());
+    EXPECT_FALSE(fd1->get_flags().is_open());
+    EXPECT_FALSE(fd1->get_flags().is_w_open());
+    EXPECT_FALSE(fd1->get_flags().is_r_open());
+    EXPECT_FALSE(fd1->get_flags().is_dead());
+    EXPECT_FALSE(fd1->get_flags().is_disabled());
+    EXPECT_FALSE(fd1->get_flags().is_r_disabled());
+    EXPECT_FALSE(fd1->get_flags().is_w_disabled());
+    EXPECT_FALSE(fd1->get_flags().is_debug_channel());
 
     // Test protected member functions.
 
-    CALL(fd1->test_input_fd_is_minus_one());
-    CALL(fd1->test_output_fd_is_minus_one());
+    CALL(fd1->test_fd_is_minus_one());
     CALL(fd1->test_close_input_device_does_nothing());
     CALL(fd1->test_close_output_device_does_nothing());
 
@@ -396,32 +361,30 @@ TEST(FileDescriptor, DefaultConstructor) {
 //-----------------------------------------------------------------------------
 // FileDescriptor.InputDeviceNoInit
 
-TEST(FileDescriptor, InputDeviceNoInit) {
+TEST(FileDescriptor, InputDeviceNoInit)
+{
   CALL(FileDescriptor::reset_instance_count());
   {
     auto fd1 = evio::create<TestInputDevice>();
     EXPECT_TRUE((std::is_same<decltype(fd1), boost::intrusive_ptr<TestInputDevice>>::value));
 
     // Test all public member functions, for a default constructed FileDescriptor.
-    EXPECT_TRUE(fd1->readable_type());
+    EXPECT_TRUE(fd1->get_flags().is_input_device());
 
-    EXPECT_FALSE(fd1->writable_type());
-    EXPECT_FALSE(fd1->is_writable());
-    EXPECT_FALSE(fd1->is_readable());   // init() wasn't called.
-    EXPECT_FALSE(fd1->dont_close());
-    EXPECT_FALSE(fd1->is_open());       // init() wasn't called.
-    EXPECT_FALSE(fd1->is_open_w());
-    EXPECT_FALSE(fd1->is_open_r());     // init() wasn't called.
-    EXPECT_FALSE(fd1->is_dead());
-    EXPECT_FALSE(fd1->is_disabled());
-#ifdef CWDEBUG
-    EXPECT_FALSE(fd1->is_debug_channel());
-#endif
+    EXPECT_FALSE(fd1->get_flags().is_output_device());
+    EXPECT_FALSE(fd1->get_flags().is_writable());
+    EXPECT_FALSE(fd1->get_flags().is_readable());   // init() wasn't called.
+    EXPECT_FALSE(fd1->get_flags().dont_close());
+    EXPECT_FALSE(fd1->get_flags().is_open());       // init() wasn't called.
+    EXPECT_FALSE(fd1->get_flags().is_w_open());
+    EXPECT_FALSE(fd1->get_flags().is_r_open());     // init() wasn't called.
+    EXPECT_FALSE(fd1->get_flags().is_dead());
+    EXPECT_FALSE(fd1->get_flags().is_disabled());
+    EXPECT_FALSE(fd1->get_flags().is_debug_channel());
 
     // Test protected member functions.
 
-    CALL(fd1->test_input_fd_is_minus_one());
-    CALL(fd1->test_output_fd_is_minus_one());
+    CALL(fd1->test_fd_is_minus_one());
     CALL(fd1->test_close_input_device_does_nothing());
     CALL(fd1->test_close_output_device_does_nothing());
 
@@ -437,32 +400,30 @@ TEST(FileDescriptor, InputDeviceNoInit) {
 //-----------------------------------------------------------------------------
 // FileDescriptor.OutputDeviceNoInit
 
-TEST(FileDescriptor, OutputDeviceNoInit) {
+TEST(FileDescriptor, OutputDeviceNoInit)
+{
   CALL(FileDescriptor::reset_instance_count());
   {
     auto fd1 = evio::create<TestOutputDevice>();
     EXPECT_TRUE((std::is_same<decltype(fd1), boost::intrusive_ptr<TestOutputDevice>>::value));
 
     // Test all public member functions, for a default constructed FileDescriptor.
-    EXPECT_TRUE(fd1->writable_type());
+    EXPECT_TRUE(fd1->get_flags().is_output_device());
 
-    EXPECT_FALSE(fd1->readable_type());
-    EXPECT_FALSE(fd1->is_writable());   // init() wasn't called.
-    EXPECT_FALSE(fd1->is_readable());
-    EXPECT_FALSE(fd1->dont_close());
-    EXPECT_FALSE(fd1->is_open());       // init() wasn't called.
-    EXPECT_FALSE(fd1->is_open_w());     // init() wasn't called.
-    EXPECT_FALSE(fd1->is_open_r());
-    EXPECT_FALSE(fd1->is_dead());
-    EXPECT_FALSE(fd1->is_disabled());
-#ifdef CWDEBUG
-    EXPECT_FALSE(fd1->is_debug_channel());
-#endif
+    EXPECT_FALSE(fd1->get_flags().is_input_device());
+    EXPECT_FALSE(fd1->get_flags().is_writable());   // init() wasn't called.
+    EXPECT_FALSE(fd1->get_flags().is_readable());
+    EXPECT_FALSE(fd1->get_flags().dont_close());
+    EXPECT_FALSE(fd1->get_flags().is_open());       // init() wasn't called.
+    EXPECT_FALSE(fd1->get_flags().is_w_open());     // init() wasn't called.
+    EXPECT_FALSE(fd1->get_flags().is_r_open());
+    EXPECT_FALSE(fd1->get_flags().is_dead());
+    EXPECT_FALSE(fd1->get_flags().is_disabled());
+    EXPECT_FALSE(fd1->get_flags().is_debug_channel());
 
     // Test protected member functions.
 
-    CALL(fd1->test_input_fd_is_minus_one());
-    CALL(fd1->test_output_fd_is_minus_one());
+    CALL(fd1->test_fd_is_minus_one());
     CALL(fd1->test_close_input_device_does_nothing());
     CALL(fd1->test_close_output_device_does_nothing());
 
@@ -496,41 +457,40 @@ void InputDeviceWithInit<started, dontclose>::test_body()
   auto fd1 = TestInputDevice::create(started, dontclose);
 
   // Test all public member functions, for a default constructed FileDescriptor.
-  EXPECT_TRUE(fd1->readable_type());
-  EXPECT_TRUE(fd1->is_readable());
-  EXPECT_TRUE(fd1->is_open());
-  EXPECT_TRUE(fd1->is_open_r());
+  EXPECT_TRUE(fd1->get_flags().is_input_device());
+  EXPECT_TRUE(fd1->get_flags().is_readable());
+  EXPECT_TRUE(fd1->get_flags().is_open());
+  EXPECT_TRUE(fd1->get_flags().is_r_open());
 
-  EXPECT_FALSE(fd1->writable_type());
-  EXPECT_FALSE(fd1->is_writable());
-  EXPECT_EQ(fd1->dont_close(), dontclose);
-  EXPECT_FALSE(fd1->is_open_w());
-  EXPECT_FALSE(fd1->is_dead());
-  EXPECT_FALSE(fd1->is_disabled());
+  EXPECT_FALSE(fd1->get_flags().is_output_device());
+  EXPECT_FALSE(fd1->get_flags().is_writable());
+  EXPECT_EQ(fd1->get_flags().dont_close(), dontclose);
+  EXPECT_FALSE(fd1->get_flags().is_w_open());
+  EXPECT_FALSE(fd1->get_flags().is_dead());
+  EXPECT_FALSE(fd1->get_flags().is_disabled());
 #ifdef CWDEBUG
-  EXPECT_FALSE(fd1->is_debug_channel());
+  EXPECT_FALSE(fd1->get_flags().is_debug_channel());
 #endif
 
   // Test protected member functions.
 
-  CALL(fd1->test_input_fd_is_set());
-  CALL(fd1->test_output_fd_is_minus_one());
+  CALL(fd1->test_fd_is_set());
   CALL(fd1->test_close_output_device_does_nothing());
   CALL(fd1->test_close_input_device_closes_fd(started));
 
-  EXPECT_TRUE(fd1->readable_type());
-  EXPECT_TRUE(fd1->is_dead());
+  EXPECT_TRUE(fd1->get_flags().is_input_device());
+  EXPECT_TRUE(fd1->get_flags().is_dead());
 
-  EXPECT_FALSE(fd1->writable_type());
-  EXPECT_FALSE(fd1->is_writable());
-  EXPECT_FALSE(fd1->is_readable());
-  EXPECT_EQ(fd1->dont_close(), dontclose);
-  EXPECT_FALSE(fd1->is_open());
-  EXPECT_FALSE(fd1->is_open_w());
-  EXPECT_FALSE(fd1->is_open_r());
-  EXPECT_FALSE(fd1->is_disabled());
+  EXPECT_FALSE(fd1->get_flags().is_output_device());
+  EXPECT_FALSE(fd1->get_flags().is_writable());
+  EXPECT_FALSE(fd1->get_flags().is_readable());
+  EXPECT_EQ(fd1->get_flags().dont_close(), dontclose);
+  EXPECT_FALSE(fd1->get_flags().is_open());
+  EXPECT_FALSE(fd1->get_flags().is_w_open());
+  EXPECT_FALSE(fd1->get_flags().is_r_open());
+  EXPECT_FALSE(fd1->get_flags().is_disabled());
 #ifdef CWDEBUG
-  EXPECT_FALSE(fd1->is_debug_channel());
+  EXPECT_FALSE(fd1->get_flags().is_debug_channel());
 #endif
 
   auto fd2 = TestInputDevice::create(started, dontclose);
@@ -539,17 +499,17 @@ void InputDeviceWithInit<started, dontclose>::test_body()
 
 void TestInputDevice::test_close_input_device_closes_fd(bool started)
 {
-  ASSERT(evio::is_valid(m_input_fd) && is_readable());        // Preconditions for this test.
+  ASSERT(evio::is_valid(get_fd()) && get_flags().is_readable());        // Preconditions for this test.
   m_closed_called  = false;
   evio::RefCountReleaser need_allow_deletion = close_input_device();
-  EXPECT_TRUE(m_closed_called);       // closed() was called.
-  EXPECT_EQ(need_allow_deletion, started);  // If need_allow_deletion is true then going out of scope will call allow_deletion(),
-                                            // but that is obviously only needed when the device was inhibited for deletion because it was started.
+  EXPECT_TRUE(m_closed_called);                 // closed() was called.
+  EXPECT_EQ(need_allow_deletion, started);      // If need_allow_deletion is true then going out of scope will call allow_deletion(),
+                                                // but that is obviously only needed when the device was inhibited for deletion because it was started.
 }
 
 void TestInputDevice::test_close_closes_input_fd(bool started)
 {
-  ASSERT(evio::is_valid(m_input_fd) && is_readable());        // Preconditions for this test.
+  ASSERT(evio::is_valid(get_fd()) && get_flags().is_readable());        // Preconditions for this test.
   m_closed_called  = false;
   evio::RefCountReleaser need_allow_deletion = close();
   EXPECT_TRUE(m_closed_called);       // closed() was called.
@@ -573,41 +533,40 @@ void OutputDeviceWithInit<started, dontclose>::test_body()
   auto fd1 = TestOutputDevice::create(started, dontclose);
 
   // Test all public member functions, for a default constructed FileDescriptor.
-  EXPECT_TRUE(fd1->writable_type());
-  EXPECT_TRUE(fd1->is_writable());
-  EXPECT_TRUE(fd1->is_open());
-  EXPECT_TRUE(fd1->is_open_w());
+  EXPECT_TRUE(fd1->get_flags().is_output_device());
+  EXPECT_TRUE(fd1->get_flags().is_writable());
+  EXPECT_TRUE(fd1->get_flags().is_open());
+  EXPECT_TRUE(fd1->get_flags().is_w_open());
 
-  EXPECT_FALSE(fd1->readable_type());
-  EXPECT_FALSE(fd1->is_readable());
-  EXPECT_EQ(fd1->dont_close(), dontclose);
-  EXPECT_FALSE(fd1->is_open_r());
-  EXPECT_FALSE(fd1->is_dead());
-  EXPECT_FALSE(fd1->is_disabled());
+  EXPECT_FALSE(fd1->get_flags().is_input_device());
+  EXPECT_FALSE(fd1->get_flags().is_readable());
+  EXPECT_EQ(fd1->get_flags().dont_close(), dontclose);
+  EXPECT_FALSE(fd1->get_flags().is_r_open());
+  EXPECT_FALSE(fd1->get_flags().is_dead());
+  EXPECT_FALSE(fd1->get_flags().is_disabled());
 #ifdef CWDEBUG
-  EXPECT_FALSE(fd1->is_debug_channel());
+  EXPECT_FALSE(fd1->get_flags().is_debug_channel());
 #endif
 
   // Test protected member functions.
 
-  CALL(fd1->test_input_fd_is_minus_one());
-  CALL(fd1->test_output_fd_is_set());
+  CALL(fd1->test_fd_is_set());
   CALL(fd1->test_close_input_device_does_nothing());
   CALL(fd1->test_close_output_device_closes_fd(started));
 
-  EXPECT_TRUE(fd1->writable_type());
-  EXPECT_TRUE(fd1->is_dead());
+  EXPECT_TRUE(fd1->get_flags().is_output_device());
+  EXPECT_TRUE(fd1->get_flags().is_dead());
 
-  EXPECT_FALSE(fd1->readable_type());
-  EXPECT_FALSE(fd1->is_writable());
-  EXPECT_FALSE(fd1->is_readable());
-  EXPECT_EQ(fd1->dont_close(), dontclose);
-  EXPECT_FALSE(fd1->is_open());
-  EXPECT_FALSE(fd1->is_open_w());
-  EXPECT_FALSE(fd1->is_open_r());
-  EXPECT_FALSE(fd1->is_disabled());
+  EXPECT_FALSE(fd1->get_flags().is_input_device());
+  EXPECT_FALSE(fd1->get_flags().is_writable());
+  EXPECT_FALSE(fd1->get_flags().is_readable());
+  EXPECT_EQ(fd1->get_flags().dont_close(), dontclose);
+  EXPECT_FALSE(fd1->get_flags().is_open());
+  EXPECT_FALSE(fd1->get_flags().is_w_open());
+  EXPECT_FALSE(fd1->get_flags().is_r_open());
+  EXPECT_FALSE(fd1->get_flags().is_disabled());
 #ifdef CWDEBUG
-  EXPECT_FALSE(fd1->is_debug_channel());
+  EXPECT_FALSE(fd1->get_flags().is_debug_channel());
 #endif
 
   auto fd2 = TestOutputDevice::create(started, dontclose);
@@ -616,7 +575,7 @@ void OutputDeviceWithInit<started, dontclose>::test_body()
 
 void TestOutputDevice::test_close_output_device_closes_fd(bool started)
 {
-  ASSERT(evio::is_valid(m_output_fd) && is_writable());       // Preconditions for this test.
+  ASSERT(evio::is_valid(get_fd()) && get_flags().is_writable());       // Preconditions for this test.
   m_closed_called  = false;
   evio::RefCountReleaser need_allow_deletion = close_output_device();
   EXPECT_TRUE(m_closed_called);       // closed() was called.
@@ -626,7 +585,7 @@ void TestOutputDevice::test_close_output_device_closes_fd(bool started)
 
 void TestOutputDevice::test_close_closes_output_fd(bool started)
 {
-  ASSERT(evio::is_valid(m_output_fd) && is_writable());     // Preconditions for this test.
+  ASSERT(evio::is_valid(get_fd()) && get_flags().is_writable());     // Preconditions for this test.
   m_closed_called  = false;
   evio::RefCountReleaser need_allow_deletion = close();
   EXPECT_TRUE(m_closed_called);       // closed() was called.
@@ -654,20 +613,23 @@ void DisableInputDevice<started, close>::test_body()
 void TestInputDevice::test_disable_input_device(bool started, bool close)
 {
   evio::SingleThread type;
-  EXPECT_EQ(is_active(type).is_transitory_true(), started);
+  EXPECT_EQ(get_flags().is_active_input_device(), started);
   disable_input_device();
-  EXPECT_TRUE(is_disabled());
-  EXPECT_TRUE(is_active(type).is_false());
+  EXPECT_TRUE(get_flags().is_disabled());
+  EXPECT_TRUE(get_flags().is_r_disabled());
+  EXPECT_FALSE(get_flags().is_w_disabled());
+  EXPECT_FALSE(get_flags().is_active_input_device());
   if (close)
     close_input_device();
   enable_input_device(type);
-  EXPECT_FALSE(is_disabled());
-  EXPECT_EQ(is_active(type).is_transitory_true(), !close);      // Even when not started before, enable_input_device() will start
+  EXPECT_FALSE(get_flags().is_disabled());
+  EXPECT_FALSE(get_flags().is_r_disabled());
+  EXPECT_EQ(get_flags().is_active_input_device(), !close);      // Even when not started before, enable_input_device() will start
                                                                 // an input device with a valid fd (because data might be readable).
-  // While a device is active it will not be deleted.
-  // In order to let TestDestruction::TearDown() not fail, call stop_input_device() here.
-  // This is also allowed when the device is already stopped.
-  evio::RefCountReleaser need_allow_deletion = stop_input_device();
+  // While a device is added it will not be deleted.
+  // In order to let TestDestruction::TearDown() not fail, call close_input_device() here.
+  // This is also allowed when the device is already closed.
+  evio::RefCountReleaser need_allow_deletion = close_input_device();
   EXPECT_EQ(need_allow_deletion, !close);
 }
 
@@ -692,21 +654,24 @@ void DisableOutputDevice<started, close>::test_body()
 void TestOutputDevice::test_disable_output_device(bool started, bool close)
 {
   evio::SingleThread type;
-  EXPECT_EQ(is_active(type).is_transitory_true(), started);
+  EXPECT_EQ(get_flags().is_active_output_device(), started);
   disable_output_device();
-  EXPECT_TRUE(is_disabled());
-  EXPECT_TRUE(is_active(type).is_false());
+  EXPECT_TRUE(get_flags().is_disabled());
+  EXPECT_TRUE(get_flags().is_w_disabled());
+  EXPECT_FALSE(get_flags().is_r_disabled());
+  EXPECT_FALSE(get_flags().is_active_output_device());
   if (close)
     close_output_device();
   enable_output_device(type);
-  EXPECT_FALSE(is_disabled());
+  EXPECT_FALSE(get_flags().is_disabled());
+  EXPECT_FALSE(get_flags().is_w_disabled());
   // Currently, calling enable_output_device() always calls start_output_device(),
   // even when there is nothing to write.
-  EXPECT_EQ(is_active(type).is_transitory_true(), !close);
-  // While a device is active it will not be deleted.
-  // In order to let TestDestruction::TearDown() not fail, call stop_output_device() here.
-  // This is also allowed when the device is already stopped.
-  evio::RefCountReleaser need_allow_deletion = stop_output_device();
+  EXPECT_EQ(get_flags().is_active_output_device(), !close);
+  // While a device is aded it will not be deleted.
+  // In order to let TestDestruction::TearDown() not fail, call close_output_device() here.
+  // This is also allowed when the device is already closed.
+  evio::RefCountReleaser need_allow_deletion = close_output_device();
   EXPECT_EQ(need_allow_deletion, !close);
 }
 

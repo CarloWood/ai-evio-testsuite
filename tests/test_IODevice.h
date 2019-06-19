@@ -1,6 +1,8 @@
 #include "evio/InputDevice.h"
 #include "evio/SocketAddress.h"
 #include "evio/inet_support.h"
+#include "evio/EventLoopThread.h"
+#include "threadpool/AIThreadPool.h"
 #ifdef CWDEBUG
 #include "libcwd/buf2str.h"
 #endif
@@ -14,19 +16,19 @@ struct InputDevice : public evio::InputDevice
 {
   using evio::InputDevice::InputDevice;
 
-  int get_input_fd() const override
+  void start_input_device()
   {
-    return evio::InputDevice::get_input_fd();
+    evio::InputDevice::start_input_device();
   }
 
-  void start_input_device(evio::GetThread type)
+  void stop_input_device()
   {
-    evio::InputDevice::start_input_device(type);
+    evio::InputDevice::stop_input_device();
   }
 
-  evio::RefCountReleaser stop_input_device()
+  evio::RefCountReleaser remove_input_device()
   {
-    return evio::InputDevice::stop_input_device();
+    return evio::InputDevice::remove_input_device();
   }
 
   void disable_input_device()
@@ -34,9 +36,24 @@ struct InputDevice : public evio::InputDevice
     evio::InputDevice::disable_input_device();
   }
 
-  void enable_input_device(evio::GetThread type)
+  void enable_input_device()
   {
-    evio::InputDevice::enable_input_device(type);
+    evio::InputDevice::enable_input_device();
+  }
+
+  void init(int fd)
+  {
+    evio::InputDevice::init(fd);
+  }
+
+  int get_fd() const
+  {
+    return evio::InputDevice::get_fd();
+  }
+
+  evio::FileDescriptorFlags const get_flags()
+  {
+    return evio::FileDescriptor::get_flags();
   }
 };
 
@@ -44,14 +61,9 @@ struct OutputDevice : public evio::OutputDevice
 {
   using evio::OutputDevice::OutputDevice;
 
-  int get_output_fd() const override
+  void start_output_device()
   {
-    return evio::OutputDevice::get_output_fd();
-  }
-
-  void start_output_device(evio::PutThread type)
-  {
-    evio::OutputDevice::start_output_device(type);
+    evio::OutputDevice::start_output_device();
   }
 
   evio::RefCountReleaser stop_output_device()
@@ -59,14 +71,39 @@ struct OutputDevice : public evio::OutputDevice
     return evio::OutputDevice::stop_output_device();
   }
 
+  evio::RefCountReleaser remove_output_device()
+  {
+    return evio::OutputDevice::remove_output_device();
+  }
+
+  evio::RefCountReleaser flush_output_device()
+  {
+    return evio::OutputDevice::flush_output_device();
+  }
+
   void disable_output_device()
   {
     evio::OutputDevice::disable_output_device();
   }
 
-  void enable_output_device(evio::PutThread type)
+  void enable_output_device()
   {
-    evio::OutputDevice::enable_output_device(type);
+    evio::OutputDevice::enable_output_device();
+  }
+
+  void init(int fd)
+  {
+    evio::OutputDevice::init(fd);
+  }
+
+  int get_fd() const
+  {
+    return evio::OutputDevice::get_fd();
+  }
+
+  evio::FileDescriptorFlags const get_flags()
+  {
+    return evio::FileDescriptor::get_flags();
   }
 };
 
@@ -121,16 +158,16 @@ class TestIODevice : public TestIODeviceNoInit
     DoutEntering(dc::notice, "TestIODevice::TearDown()");
     if (m_input_device->is_active(evio::SingleThread()).is_momentary_true())
     {
-      auto need_allow_deletion = m_input_device->stop_input_device();
+      auto need_allow_deletion = m_input_device->close_input_device();
       // is_momentary_true() here really means is_true() -- because we don't have an EventLoopThread running during this test, nor any other threads.
       // Therefore, this should always be true.
-      EXPECT_TRUE(need_allow_deletion); // To cancel inhibit_deletion of being active.
+      EXPECT_TRUE(need_allow_deletion); // To cancel inhibit_deletion of being added.
     }
     if (m_output_device->is_active(evio::SingleThread()).is_momentary_true())
     {
-      auto need_allow_deletion = m_output_device->stop_output_device();
+      auto need_allow_deletion = m_output_device->close_output_device();
       // See comment above.
-      EXPECT_TRUE(need_allow_deletion); // To cancel inhibit_deletion of being active.
+      EXPECT_TRUE(need_allow_deletion); // To cancel inhibit_deletion of being added.
     }
     // Make sure these are really the last references.
     EXPECT_TRUE(m_input_device->unique().is_true());
@@ -143,17 +180,20 @@ class TestIODevice : public TestIODeviceNoInit
   }
 };
 
-TEST_F(TestIODeviceNoInit, SetUpAndTearDown) {
-  EXPECT_EQ(m_input_device->get_input_fd(), -1);
-  EXPECT_EQ(m_output_device->get_output_fd(), -1);
+TEST_F(TestIODeviceNoInit, SetUpAndTearDown)
+{
+  EXPECT_EQ(m_input_device->get_fd(), -1);
+  EXPECT_EQ(m_output_device->get_fd(), -1);
 }
 
-TEST_F(TestIODevice, SetUpAndTearDown) {
-  EXPECT_EQ(m_input_device->get_input_fd(), pipefd[0]);
-  EXPECT_EQ(m_output_device->get_output_fd(), pipefd[1]);
+TEST_F(TestIODevice, SetUpAndTearDown)
+{
+  EXPECT_EQ(m_input_device->get_fd(), pipefd[0]);
+  EXPECT_EQ(m_output_device->get_fd(), pipefd[1]);
 }
 
-TEST_F(TestIODevice, StartStop) {
+TEST_F(TestIODevice, StartStop)
+{
   // Introduction
   // ------------
   //
@@ -239,8 +279,6 @@ TEST_F(TestIODevice, StartStop) {
   // it just can't exclude actions by the EventLoopThread -- so it makes little sense
   // to define it otherwise.
 
-  evio::SingleThread type;
-
   // Before starting:
   //
   // Inactive InputDevice.
@@ -258,8 +296,8 @@ TEST_F(TestIODevice, StartStop) {
   EXPECT_TRUE(m_input_device->unique().is_true());
   EXPECT_TRUE(m_output_device->unique().is_true());
 
-  m_input_device->start_input_device(type);
-  m_output_device->start_output_device(type);
+  m_input_device->start_input_device();
+  m_output_device->start_output_device();
 
   // Starting a device causes a call to inhibit_deletion().
   EXPECT_TRUE(m_input_device->unique().is_momentary_false());
@@ -294,14 +332,21 @@ TEST_F(TestIODevice, StartStop) {
   EXPECT_TRUE(m_output_device->is_active(evio::PutThread()).is_false());
   EXPECT_TRUE(m_output_device->is_active(evio::AnyThread()).is_transitory_false());
 
-  // Now that the devices are inactive again, the inhibit was removed.
+  // Stopping the devices didn't remove them from the epoll interest list,
+  // and therefore the inhibit_deletion is still in effect.
+  EXPECT_TRUE(m_input_device->unique().is_momentary_false());
+  EXPECT_TRUE(m_output_device->unique().is_momentary_false());
+
+  m_input_device->remove_input_device();
+  m_output_device->remove_output_device();
+
+  // Now that the devices are removed, the inhibit was removed. remove
   EXPECT_TRUE(m_input_device->unique().is_true());
   EXPECT_TRUE(m_output_device->unique().is_true());
 }
 
-TEST_F(TestIODevice, DisableStartEnableStartStop) {
-  evio::SingleThread type;
-
+TEST_F(TestIODevice, DisableStartEnableStartStop)
+{
   // If a device is disabled before starting...
   m_input_device->disable_input_device();
   m_output_device->disable_output_device();
@@ -310,8 +355,8 @@ TEST_F(TestIODevice, DisableStartEnableStartStop) {
   EXPECT_TRUE(m_output_device->unique().is_true());
 
   // Starting while being disabled prints a WARNING (you shouldn't do that).
-  m_input_device->start_input_device(type);
-  m_output_device->start_output_device(type);
+  m_input_device->start_input_device();
+  m_output_device->start_output_device();
   // And they weren't started.
   EXPECT_TRUE(m_input_device->is_active(evio::SingleThread()).is_false());
   EXPECT_TRUE(m_output_device->is_active(evio::SingleThread()).is_false());
@@ -320,8 +365,8 @@ TEST_F(TestIODevice, DisableStartEnableStartStop) {
   EXPECT_TRUE(m_output_device->unique().is_true());
 
   // Enabling the devices again...
-  m_input_device->enable_input_device(type);
-  m_output_device->enable_output_device(type);
+  m_input_device->enable_input_device();
+  m_output_device->enable_output_device();
   // DOES start them however.
   EXPECT_TRUE(m_input_device->is_active(evio::SingleThread()).is_transitory_true());
   EXPECT_TRUE(m_output_device->is_active(evio::SingleThread()).is_transitory_true());
@@ -330,8 +375,8 @@ TEST_F(TestIODevice, DisableStartEnableStartStop) {
   EXPECT_TRUE(m_output_device->unique().is_momentary_false());
 
   // Starting devices that are already started does nothing.
-  m_input_device->start_input_device(type);
-  m_output_device->start_output_device(type);
+  m_input_device->start_input_device();
+  m_output_device->start_output_device();
 
   // Stopping them...
   m_input_device->stop_input_device();
@@ -339,16 +384,23 @@ TEST_F(TestIODevice, DisableStartEnableStartStop) {
   // Makes them inactive again.
   EXPECT_TRUE(m_input_device->is_active(evio::SingleThread()).is_false());
   EXPECT_TRUE(m_output_device->is_active(evio::SingleThread()).is_false());
+  // And the inhibit_deletion was not cancelled yet.
+  EXPECT_TRUE(m_input_device->unique().is_momentary_false());
+  EXPECT_TRUE(m_output_device->unique().is_momentary_false());
+
+  // Removing them...
+  m_input_device->remove_input_device();
+  m_output_device->remove_output_device();
   // And the inhibit_deletion was cancelled.
   EXPECT_TRUE(m_input_device->unique().is_true());
   EXPECT_TRUE(m_output_device->unique().is_true());
 }
 
-TEST_F(TestIODevice, StartDisableEnableClose) {
-  evio::SingleThread type;
+TEST_F(TestIODevice, StartDisableEnableClose)
+{
   // Disabling devices that are already started...
-  m_input_device->start_input_device(type);
-  m_output_device->start_output_device(type);
+  m_input_device->start_input_device();
+  m_output_device->start_output_device();
   m_input_device->disable_input_device();
   m_output_device->disable_output_device();
   // Should still keep them alive.
@@ -358,26 +410,26 @@ TEST_F(TestIODevice, StartDisableEnableClose) {
   EXPECT_TRUE(m_input_device->is_active(evio::SingleThread()).is_false());
   EXPECT_TRUE(m_output_device->is_active(evio::SingleThread()).is_false());
 
-  m_input_device->enable_input_device(type);
-  m_output_device->enable_output_device(type);
+  m_input_device->enable_input_device();
+  m_output_device->enable_output_device();
   m_input_device->close_input_device();
   m_output_device->close_output_device();
 }
 
-TEST_F(TestIODevice, StartDisableClose) {
-  evio::SingleThread type;
-  m_input_device->start_input_device(type);
-  m_output_device->start_output_device(type);
+TEST_F(TestIODevice, StartDisableClose)
+{
+  m_input_device->start_input_device();
+  m_output_device->start_output_device();
   m_input_device->disable_input_device();
   m_output_device->disable_output_device();
   m_input_device->close_input_device();
   m_output_device->close_output_device();
 }
 
-TEST_F(TestIODevice, StartDisableEnableStop) {
-  evio::SingleThread type;
-  m_input_device->start_input_device(type);
-  m_output_device->start_output_device(type);
+TEST_F(TestIODevice, StartDisableEnableStop)
+{
+  m_input_device->start_input_device();
+  m_output_device->start_output_device();
   m_input_device->disable_input_device();
   m_output_device->disable_output_device();
   m_input_device->stop_input_device();
@@ -399,6 +451,7 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
   int m_read_error_count;
   int m_data_received_count;
   int m_write_error_count;
+  std::function<void()> m_write_error_detected;
 
  public:
   struct VT_type : evio::InputDevice::VT_type, evio::OutputDevice::VT_type
@@ -447,6 +500,7 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
       DoutEntering(dc::notice|flush_cf, "TestSocket::write_error(" << _self << ", " << err << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_write_error_count++;
+      self->m_write_error_detected();
       OutputDevice::VT_impl::write_error(_self, err);
     }
 
@@ -455,6 +509,8 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
         /*InputDevice*/
       { nullptr,
         read_from_fd,
+        hup,
+        exceptional,
         read_returned_zero,
         read_error,
         data_received },
@@ -475,20 +531,42 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
                  m_read_error_count(0), m_data_received_count(0), m_write_error_count(0),
                  VT_ptr(this) { DoutEntering(dc::evio, "TestSocket::TestSocket() [" << this << "]"); }
 
-  ~TestSocket() { DoutEntering(dc::evio, "TestSocket::~TestSocket()"); }
-
-  void open()
+  ~TestSocket()
   {
-    DoutEntering(dc::notice, "TestSocket::open()");
+    DoutEntering(dc::evio, "TestSocket::~TestSocket()");
+    if (m_socket_fd != -1)
+    {
+      Dout(dc::system|continued_cf, "::close(" << m_socket_fd << ") = ");
+      CWDEBUG_ONLY(int res =) ::close(m_socket_fd);
+      Dout(dc::finish|cond_error_cf(res == -1), res);
+    }
+  }
+
+  void init()
+  {
+    DoutEntering(dc::notice, "TestSocket::init()");
     m_socket_fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
     FileDescriptor::init(m_socket_fd);
-    evio::SingleThread type;
-    start_input_device(type);
-    start_output_device(type);
+  }
+
+  void listen()
+  {
+    DoutEntering(dc::notice, "TestSocket::listen()");
+    init();
+    ::listen(m_socket_fd, 4);
+    start_input_device();
+  }
+
+  void connect()
+  {
+    DoutEntering(dc::notice, "TestSocket::connect()");
+    init();
     evio::SocketAddress sa("127.0.0.1:9001");
-    int res = connect(m_socket_fd, sa, evio::size_of_addr(sa));
+    int res = ::connect(m_socket_fd, sa, evio::size_of_addr(sa));
     if (res == -1 && errno != EINPROGRESS)
       THROW_ALERTE("connect([FD], [SA], [SA_SIZE])", AIArgs("[FD]", m_socket_fd)("[SA]", sa)("[SA_SIZE]", evio::size_of_addr(sa)));
+    start_input_device();
+    start_output_device();
   }
 
   void close()
@@ -497,9 +575,15 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
     FileDescriptor::close();
   }
 
-  void close_fd()
+  void screw_fd()
   {
-    ::close(m_socket_fd);
+    m_fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
+    ::close(m_fd);
+  }
+
+  void set_write_error_callback(std::function<void()> cb)
+  {
+    m_write_error_detected = cb;
   }
 
   int write_to_fd_count() const { return m_write_to_fd_count; }
@@ -522,7 +606,7 @@ class TestInputDecoder : public evio::InputDecoder
   void dont_stop() { m_stop_after_one_message = false; }
 
  protected:
-  evio::RefCountReleaser decode(evio::MsgBlock&& msg, evio::GetThread) override
+  evio::RefCountReleaser decode(evio::MsgBlock&& msg) override
   {
     // Just print what was received.
     DoutEntering(dc::notice, "TestInputDecoder::decode(\"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
@@ -530,7 +614,7 @@ class TestInputDecoder : public evio::InputDecoder
     // Stop after receiving just one message.
     evio::RefCountReleaser allow_deletion;
     if (m_stop_after_one_message)
-      allow_deletion = stop_input_device();
+      allow_deletion = close_input_device();
     return allow_deletion;
   }
 };
@@ -549,6 +633,8 @@ class EventLoopFixture : public HtmlPipeLineServerFixture
   {
     DoutEntering(dc::notice, "EventLoopFixture::SetUp()");
     HtmlPipeLineServerFixture::SetUp();
+    // Initialize signals.
+    AISignals signals({SIGPIPE});
     [[maybe_unused]] AIQueueHandle high_priority_handler = m_thread_pool.new_queue(32);
     [[maybe_unused]] AIQueueHandle medium_priority_handler = m_thread_pool.new_queue(32);
     m_low_priority_handler = m_thread_pool.new_queue(16);
@@ -590,19 +676,31 @@ class IODeviceFixture : public EventLoopFixture
   TestInputDecoder decoder;
   evio::OutputStream output;
   boost::intrusive_ptr<TestSocket> io_device;
+  boost::intrusive_ptr<TestSocket> keep_alive_device;
 
  protected:
   void SetUp()
   {
+    DoutEntering(dc::notice, "IODeviceFixture::SetUp()");
     EventLoopFixture::SetUp();
     io_device = evio::create<TestSocket>();
+    Dout(dc::notice, "io_device = " << io_device.get());
     io_device->input(decoder);
     io_device->output(output);
-    CALL(io_device->open());                                            // Because open() calls start_input_device()...
+    CALL(io_device->connect());                                       // Because connect() calls start_input_device()...
+  }
+
+  void keep_alive()
+  {
+    Dout(dc::notice, "IODeviceFixture::keep_alive()");
+    keep_alive_device = evio::create<TestSocket>();
+    keep_alive_device->input(decoder);
+    CALL(keep_alive_device->listen());
   }
 
   void TearDown()
   {
+    DoutEntering(dc::notice, "IODeviceFixture::TearDown()");
     Dout(dc::notice|flush_cf, "Removing last boost::intrusive_ptr for " << io_device.get());
     io_device.reset();
     Dout(dc::notice|flush_cf, "Removed last boost::intrusive_ptr...");
@@ -667,17 +765,209 @@ TEST_F(IODeviceFixture, request_with_close)
   EXPECT_EQ(io_device->read_returned_zero_count(), 1);                // One for the close.
 }
 
-TEST_F(IODeviceFixture, read_error_write_error)
+TEST_F(IODeviceFixture, read_error)
 {
   decoder.dont_stop();                                                // Don't close the fd after reading one message.
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
   output << generate_request_with_close(1, 10) << std::flush;         // Server will wait 10 ms then write one message and immediately close the fd.
-  io_device->close_fd();
+  std::this_thread::sleep_for(std::chrono::milliseconds(1));          // Give the library the time to write this message to the server.
+  io_device->screw_fd();                                              // Screw our fd.
   std::this_thread::sleep_for(std::chrono::milliseconds(20));
   EXPECT_EQ(io_device->write_to_fd_count(), 2);                       // Same as above tests.
-  EXPECT_EQ(io_device->read_from_fd_count(), 1);                      // One for the close.
+  EXPECT_EQ(io_device->read_from_fd_count(), 1);                      // We were woken up because peer closed connection.
   EXPECT_EQ(io_device->data_received_count(), 0);                     // No message received.
-  EXPECT_EQ(io_device->read_returned_zero_count(), 0);                // No remote close.
+  EXPECT_EQ(io_device->read_returned_zero_count(), 0);                // No remote close because we get a read error instead of reading EOF.
   EXPECT_EQ(io_device->read_error_count(), 1);                        // We were woken up, but trying to read caused a EBADF error.
-  EXPECT_EQ(io_device->write_error_count(), 1);                       // The attempt to write the message failed with a EBADF error.
+  EXPECT_EQ(io_device->write_error_count(), 0);
+}
+
+TEST_F(IODeviceFixture, write_error)
+{
+  keep_alive();
+  io_device->close_input_device();
+  io_device->set_write_error_callback([&](){ keep_alive_device->close(); });
+  decoder.dont_stop();                                                // Don't close the fd after reading one message.
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  output << generate_request_with_close(1, 1) << std::flush;          // Server will wait 1 ms then write one message and immediately close the fd.
+  std::this_thread::sleep_for(std::chrono::milliseconds(2));
+  output << std::string(100000, 'x') << std::flush;
+  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  EXPECT_GE(io_device->write_to_fd_count(), 2);                       // One EOF at the start and then at least one for the burst until that runs into a write error.
+  EXPECT_EQ(io_device->write_error_count(), 1);
+}
+
+void test_is_Closed(boost::intrusive_ptr<InputDevice> input_device)
+{
+  EXPECT_FALSE(input_device->get_flags().is_r_open());
+  EXPECT_FALSE(input_device->get_flags().is_r_added());
+  EXPECT_FALSE(input_device->get_flags().is_active_input_device());
+  EXPECT_TRUE(input_device->get_flags().is_dead());
+}
+
+void test_is_Closed(boost::intrusive_ptr<OutputDevice> output_device)
+{
+  EXPECT_FALSE(output_device->get_flags().is_w_open());
+  EXPECT_FALSE(output_device->get_flags().is_w_added());
+  EXPECT_FALSE(output_device->get_flags().is_active_output_device());
+  EXPECT_FALSE(output_device->get_flags().is_w_flushing());
+  EXPECT_TRUE(output_device->get_flags().is_dead());
+}
+
+void test_is_Removed(boost::intrusive_ptr<InputDevice> input_device)
+{
+  EXPECT_TRUE(input_device->get_flags().is_r_open());
+  EXPECT_FALSE(input_device->get_flags().is_r_added());
+  EXPECT_FALSE(input_device->get_flags().is_active_input_device());
+}
+
+void test_is_Removed(boost::intrusive_ptr<OutputDevice> output_device)
+{
+  EXPECT_TRUE(output_device->get_flags().is_w_open());
+  EXPECT_FALSE(output_device->get_flags().is_w_added());
+  EXPECT_FALSE(output_device->get_flags().is_active_output_device());
+  EXPECT_FALSE(output_device->get_flags().is_w_flushing());
+}
+
+void test_is_Added(boost::intrusive_ptr<InputDevice> input_device)
+{
+  EXPECT_TRUE(input_device->get_flags().is_r_open());
+  EXPECT_TRUE(input_device->get_flags().is_r_added());
+  EXPECT_FALSE(input_device->get_flags().is_active_input_device());
+}
+
+void test_is_Added(boost::intrusive_ptr<OutputDevice> output_device)
+{
+  EXPECT_TRUE(output_device->get_flags().is_w_open());
+  EXPECT_TRUE(output_device->get_flags().is_w_added());
+  EXPECT_FALSE(output_device->get_flags().is_active_output_device());
+  EXPECT_FALSE(output_device->get_flags().is_w_flushing());
+}
+
+void test_is_Active(boost::intrusive_ptr<InputDevice> input_device)
+{
+  EXPECT_TRUE(input_device->get_flags().is_r_open());
+  EXPECT_TRUE(input_device->get_flags().is_r_added());
+  EXPECT_TRUE(input_device->get_flags().is_active_input_device());
+}
+
+void test_is_Active(boost::intrusive_ptr<OutputDevice> output_device)
+{
+  EXPECT_TRUE(output_device->get_flags().is_w_open());
+  EXPECT_TRUE(output_device->get_flags().is_w_added());
+  EXPECT_TRUE(output_device->get_flags().is_active_output_device());
+  EXPECT_FALSE(output_device->get_flags().is_w_flushing());
+}
+
+void test_is_Flushing(boost::intrusive_ptr<OutputDevice> output_device)
+{
+  EXPECT_TRUE(output_device->get_flags().is_w_open());
+  EXPECT_TRUE(output_device->get_flags().is_w_added());
+  EXPECT_TRUE(output_device->get_flags().is_active_output_device());
+  EXPECT_TRUE(output_device->get_flags().is_w_flushing());
+}
+
+TEST_F(TestIODevice, DeviceStatesRemovedClose)
+{
+  // Test that input and output device are in state 'Removed'.
+  CALL(test_is_Removed(m_input_device));
+  CALL(test_is_Removed(m_output_device));
+
+  m_input_device->stop_input_device();
+  EXPECT_FALSE(m_output_device->stop_output_device());
+  CALL(test_is_Removed(m_input_device));
+  CALL(test_is_Removed(m_output_device));
+
+  EXPECT_FALSE(m_input_device->close_input_device());
+  EXPECT_FALSE(m_output_device->close_output_device());
+  CALL(test_is_Closed(m_input_device));
+  CALL(test_is_Closed(m_output_device));
+}
+
+TEST_F(TestIODevice, DeviceStatesAddedClose)
+{
+  m_input_device->start_input_device();
+  m_output_device->start_output_device();
+  CALL(test_is_Active(m_input_device));
+  CALL(test_is_Active(m_output_device));
+
+  m_input_device->start_input_device();
+  m_output_device->start_output_device();
+  CALL(test_is_Active(m_input_device));
+  CALL(test_is_Active(m_output_device));
+
+  m_input_device->stop_input_device();
+  EXPECT_FALSE(m_output_device->stop_output_device());
+  CALL(test_is_Added(m_input_device));
+  CALL(test_is_Added(m_output_device));
+
+  m_input_device->start_input_device();
+  m_output_device->start_output_device();
+  CALL(test_is_Active(m_input_device));
+  CALL(test_is_Active(m_output_device));
+
+  m_input_device->stop_input_device();
+  EXPECT_FALSE(m_output_device->stop_output_device());
+  CALL(test_is_Added(m_input_device));
+  CALL(test_is_Added(m_output_device));
+
+  evio::RefCountReleaser input_releaser = m_input_device->close_input_device();
+  evio::RefCountReleaser output_releaser = m_output_device->close_output_device();
+  CALL(test_is_Closed(m_input_device));
+  CALL(test_is_Closed(m_output_device));
+  EXPECT_TRUE(input_releaser);
+  EXPECT_TRUE(output_releaser);
+}
+
+TEST_F(TestIODevice, DeviceStatesActiveClose)
+{
+  m_input_device->start_input_device();
+  m_output_device->start_output_device();
+
+  evio::RefCountReleaser input_releaser = m_input_device->close_input_device();
+  evio::RefCountReleaser output_releaser = m_output_device->close_output_device();
+  CALL(test_is_Closed(m_input_device));
+  CALL(test_is_Closed(m_output_device));
+  EXPECT_TRUE(input_releaser);
+  EXPECT_TRUE(output_releaser);
+}
+
+TEST_F(TestIODevice, DeviceStatesFlushingClose)
+{
+  m_output_device->start_output_device();
+  m_output_device->flush_output_device();
+  CALL(test_is_Flushing(m_output_device));
+  EXPECT_FALSE(m_output_device->flush_output_device());
+  CALL(test_is_Flushing(m_output_device));
+  m_output_device->start_output_device();
+  CALL(test_is_Flushing(m_output_device));
+  evio::RefCountReleaser output_releaser = m_output_device->close_output_device();
+  CALL(test_is_Closed(m_output_device));
+  EXPECT_TRUE(output_releaser);
+}
+
+TEST_F(TestIODevice, DeviceStatesFlushingStop)
+{
+  m_output_device->start_output_device();
+  m_output_device->flush_output_device();
+  CALL(test_is_Flushing(m_output_device));
+  evio::RefCountReleaser output_releaser = m_output_device->stop_output_device();
+  CALL(test_is_Closed(m_output_device));
+  EXPECT_TRUE(output_releaser);
+}
+
+TEST_F(TestIODevice, DeviceStatesRemovedFlush)
+{
+  evio::RefCountReleaser output_releaser = m_output_device->flush_output_device();
+  CALL(test_is_Closed(m_output_device));
+  EXPECT_FALSE(output_releaser);
+}
+
+TEST_F(TestIODevice, DeviceStatesAddedFlush)
+{
+  m_output_device->start_output_device();
+  m_output_device->stop_output_device();
+  CALL(test_is_Added(m_output_device));
+  evio::RefCountReleaser output_releaser = m_output_device->flush_output_device();
+  CALL(test_is_Closed(m_output_device));
+  EXPECT_TRUE(output_releaser);
 }

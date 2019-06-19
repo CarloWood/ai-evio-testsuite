@@ -2,7 +2,8 @@
 #include "utils/malloc_size.h"
 #include "utils/is_power_of_two.h"
 
-TEST(OutputStream, default_output_blocksize_c) {
+TEST(OutputStream, default_output_blocksize_c)
+{
   Dout(dc::notice, "default_output_blocksize_c = " << evio::default_output_blocksize_c);
   size_t const requested_size = sizeof(evio::MemoryBlock) + evio::default_output_blocksize_c;
   size_t const alloc_size = utils::malloc_size(requested_size);
@@ -19,6 +20,11 @@ class MyOutputDevice : public evio::OutputDevice
   {
     return evio::OutputDevice::stop_output_device();
   }
+
+  void init(int fd)
+  {
+    evio::OutputDevice::init(fd);
+  }
 };
 
 class MyOutputStream : public evio::OutputStream
@@ -26,13 +32,14 @@ class MyOutputStream : public evio::OutputStream
  public:
   using evio::OutputStream::OutputStream;
 
-  void start_output_device(evio::PutThread type)
+  void start_output_device()
   {
-    evio::OutputStream::start_output_device(type);
+    evio::OutputStream::start_output_device();
   }
 };
 
-TEST(OutputStream, create_buffer) {
+TEST(OutputStream, create_buffer)
+{
   // Create a test OutputDevice.
   auto output_device = evio::create<MyOutputDevice>();
 
@@ -75,8 +82,8 @@ TEST(OutputStream, create_buffer) {
     // Sanity check.
     EXPECT_TRUE(output_device->is_active(type).is_false());
 
-    // Verify that a call to start_output_device now calls m_output_device->start_output_device(type).
-    output.start_output_device(type);
+    // Verify that a call to start_output_device now calls m_output_device->start_output_device().
+    output.start_output_device();
     EXPECT_TRUE(output_device->is_active(type).is_transitory_true());
 
 #if 0

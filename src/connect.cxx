@@ -34,7 +34,7 @@ class MyDecoder : public InputDecoder
   MyDecoder() CWDEBUG_ONLY(: m_received(0)) { }
 
  protected:
-  RefCountReleaser decode(MsgBlock&& msg, GetThread) override;
+  RefCountReleaser decode(MsgBlock&& msg) override;
 };
 
 // This is the type of the accepted sockets when a new client connects to our listen socket.
@@ -97,6 +97,8 @@ class MySocket : public Socket
         /*InputDevice*/
       { nullptr,
         read_from_fd,
+        hup,
+        exceptional,
         read_returned_zero,
         read_error,
         data_received },
@@ -173,7 +175,7 @@ int main()
   Dout(dc::notice, "Leaving main...");
 }
 
-evio::RefCountReleaser MyDecoder::decode(MsgBlock&& CWDEBUG_ONLY(msg), GetThread)
+evio::RefCountReleaser MyDecoder::decode(MsgBlock&& CWDEBUG_ONLY(msg))
 {
   RefCountReleaser need_allow_deletion;
   // Just print what was received.

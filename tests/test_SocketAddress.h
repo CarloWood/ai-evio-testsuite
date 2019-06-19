@@ -78,8 +78,8 @@ static void test_equal(evio::SocketAddress const& sa1, evio::SocketAddress const
   EXPECT_FALSE(sa2 < sa1);
 }
 
-TEST(SocketAddressDeathTest, DefaultConstruction) {
-
+TEST(SocketAddressDeathTest, DefaultConstruction)
+{
   // Default constructor.
   evio::SocketAddress sa1;
   CALL(test_is_unspecified(sa1));
@@ -107,7 +107,8 @@ struct sockaddr_un const sun_data = {
   AF_UNIX, { '/', 's', 'o', 'm', 'e', '/', 'p', 'a', 't', 'h', 0, }
 };
 
-TEST(SocketAddressDeathTest, StructSockAddrConstructor) {
+TEST(SocketAddressDeathTest, StructSockAddrConstructor)
+{
   // Construct a AF_INET SocketAddress.
   evio::SocketAddress sa1((struct sockaddr*)&sin_data);
   EXPECT_EQ(sa1.to_string(), "254.220.186.152:65040");
@@ -173,7 +174,8 @@ std::array<InOut, 28> const sockaddr_data = {{
   { "[::ffff:0.01.255.00]:0", "[::ffff:0.1.255.0]:0", AF_INET6 },
 }};
 
-TEST(SocketAddress, StringViewConstruction) {
+TEST(SocketAddress, StringViewConstruction)
+{
   for (auto&& test_case : sockaddr_data)
   {
     evio::SocketAddress sa1(test_case.input);

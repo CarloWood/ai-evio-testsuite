@@ -17,11 +17,16 @@ class TestInputDevice : public InputDevice
  public:
   TestInputDevice() : VT_ptr(this) { }
 
-  void start(GetThread type)
+  void init(int fd)
+  {
+    FileDescriptor::init(fd);
+  }
+
+  void start()
   {
     // This object does not use a buffer, but instead overrides read_from_fd directly.
     // Therefore it is not necessary to call input().
-    start_input_device(type);
+    start_input_device(state_t::wat(m_state));
   }
 
  public:
@@ -36,6 +41,8 @@ class TestInputDevice : public InputDevice
       /*InputDevice*/
       nullptr,
       read_from_fd,
+      hup,
+      exceptional,
       read_returned_zero,
       read_error,
       data_received,
@@ -76,11 +83,16 @@ class TestOutputDevice : public OutputDevice
  public:
   TestOutputDevice() : VT_ptr(this) { }
 
-  void start(PutThread type)
+  void init(int fd)
+  {
+    FileDescriptor::init(fd);
+  }
+
+  void start()
   {
     // This object does not use a buffer, but instead overrides write_to_fd directly.
     // Therefore it is not necessary to call output().
-    start_output_device(type);
+    start_output_device(state_t::wat(m_state));
   }
 };
 
@@ -103,9 +115,8 @@ int main()
     fdp0->init(0);        // Standard input.
     fdp1->init(1);        // Standard output.
 
-    evio::SingleThread type;
-    fdp0->start(type);
-    fdp1->start(type);
+    fdp0->start();
+    fdp1->start();
 
     event_loop.join();
   }
@@ -132,8 +143,8 @@ void TestInputDevice::VT_impl::read_from_fd(evio::InputDevice* _self, int fd)
   if (strncmp(buf, "quit\n", 5) == 0)
   {
     TestInputDevice* self = static_cast<TestInputDevice*>(_self);
-    ev_break(EV_A_ EVBREAK_ALL);        // Terminate EventLoopThread.
-    self->close();                      // Remove this object.
+    EventLoopThread::instance().stop_running(); // Terminate EventLoopThread.
+    self->close();                              // Remove this object.
   }
 }
 
