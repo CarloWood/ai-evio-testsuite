@@ -612,7 +612,6 @@ void DisableInputDevice<started, close>::test_body()
 
 void TestInputDevice::test_disable_input_device(bool started, bool close)
 {
-  evio::SingleThread type;
   EXPECT_EQ(get_flags().is_active_input_device(), started);
   disable_input_device();
   EXPECT_TRUE(get_flags().is_disabled());
@@ -621,7 +620,7 @@ void TestInputDevice::test_disable_input_device(bool started, bool close)
   EXPECT_FALSE(get_flags().is_active_input_device());
   if (close)
     close_input_device();
-  enable_input_device(type);
+  enable_input_device();
   EXPECT_FALSE(get_flags().is_disabled());
   EXPECT_FALSE(get_flags().is_r_disabled());
   EXPECT_EQ(get_flags().is_active_input_device(), !close);      // Even when not started before, enable_input_device() will start
@@ -653,7 +652,6 @@ void DisableOutputDevice<started, close>::test_body()
 
 void TestOutputDevice::test_disable_output_device(bool started, bool close)
 {
-  evio::SingleThread type;
   EXPECT_EQ(get_flags().is_active_output_device(), started);
   disable_output_device();
   EXPECT_TRUE(get_flags().is_disabled());
@@ -662,7 +660,7 @@ void TestOutputDevice::test_disable_output_device(bool started, bool close)
   EXPECT_FALSE(get_flags().is_active_output_device());
   if (close)
     close_output_device();
-  enable_output_device(type);
+  enable_output_device();
   EXPECT_FALSE(get_flags().is_disabled());
   EXPECT_FALSE(get_flags().is_w_disabled());
   // Currently, calling enable_output_device() always calls start_output_device(),

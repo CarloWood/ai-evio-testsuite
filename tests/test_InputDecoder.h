@@ -100,10 +100,10 @@ TEST(InputDecoder, create_buffer)
 
     // Verify that a call to start_input_device now calls m_input_device->start_input_device().
     decoder.start_input_device();
-    EXPECT_TRUE(input_device->is_active().is_transitory_true());
+    EXPECT_TRUE(input_device->is_active(type).is_transitory_true());
 
     // Likewise when calling stop_input_device().
-    evio::RefCountReleaser allow_deletion = decoder.stop_input_device();
+    decoder.stop_input_device();
     EXPECT_TRUE(input_device->is_active(type).is_false());
 
     // Check if the expected arguments were passed.
