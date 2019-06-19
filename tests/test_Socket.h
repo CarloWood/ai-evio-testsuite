@@ -52,6 +52,7 @@ class MyListenSocket : public evio::ListenSocket<MyAcceptedSocket>
       for (int n = 0; n < 1000; ++n)
         accepted_socket() << "START012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789THEEND\n";
       accepted_socket() << std::flush;
+      accepted_socket.flush_output_device();
       self->close();
     }
 
@@ -135,8 +136,7 @@ template<threadpool::Timer::time_point::rep count, typename Unit> using Interval
 TEST(Socket, Constructor)
 {
   // Initialize signals.
-  AISignals signals({SIGINT, SIGPIPE});
-  signals.default_handler(SIGINT);
+  AISignals signals({SIGPIPE});
 
   // Create a thread pool.
   AIThreadPool thread_pool;
@@ -179,6 +179,7 @@ TEST(Socket, Constructor)
       //socket->output(socket, 1024 - 32, 4096, 1000000);
       socket->input(decoder, 1024 - 32, 4096, 1000000);
       socket->connect(listen_address);
+      socket->flush_output_device();
     }
 
     event_loop.join();
