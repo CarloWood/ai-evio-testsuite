@@ -33,8 +33,8 @@ class Socket : public evio::InputDevice, public evio::OutputDevice
 
   struct VT_impl : InputDevice::VT_impl, OutputDevice::VT_impl
   {
-    static void read_from_fd(evio::InputDevice* _self, int fd); // Read thread.
-    static void write_to_fd(evio::OutputDevice* _self, int fd); // Write thread.
+    static NAD_DECL(read_from_fd, evio::InputDevice* _self, int fd); // Read thread.
+    static NAD_DECL(write_to_fd, evio::OutputDevice* _self, int fd); // Write thread.
 
     static constexpr VT_type VT{
       /*InputDevice*/
@@ -152,9 +152,9 @@ void Socket::connect_to_server(char const* remote_host, int remote_port)
 }
 
 // Read thread.
-void Socket::VT_impl::read_from_fd(evio::InputDevice* _self, int fd)
+NAD_DECL(Socket::VT_impl::read_from_fd, evio::InputDevice* _self, int fd)
 {
-  DoutEntering(dc::notice, "Socket::read_from_fd(" << fd << ")");
+  DoutEntering(dc::notice, "Socket::read_from_fd(" NAD_DoutEntering_ARG << fd << ")");
   Socket* self = static_cast<Socket*>(_self);
   char buf[256];
   ssize_t len;
@@ -164,10 +164,7 @@ void Socket::VT_impl::read_from_fd(evio::InputDevice* _self, int fd)
     len = ::read(fd, buf, 256);
     Dout(dc::finish|cond_error_cf(len == -1), len);
     if (len == -1)
-    {
-      self->evio::InputDevice::close();
-      return;
-    }
+      NAD_CALL(self->evio::InputDevice::close);
     Dout(dc::notice, "Read: \"" << libcwd::buf2str(buf, len) << "\".");
   }
   while (len == 256);
@@ -179,10 +176,10 @@ void Socket::VT_impl::read_from_fd(evio::InputDevice* _self, int fd)
 }
 
 // Write thread.
-void Socket::VT_impl::write_to_fd(evio::OutputDevice* _self, int fd)
+NAD_DECL(Socket::VT_impl::write_to_fd, evio::OutputDevice* _self, int fd)
 {
   Socket* self = static_cast<Socket*>(_self);
-  DoutEntering(dc::notice, "Socket::write_to_fd(" << fd << ")");
+  DoutEntering(dc::notice, "Socket::write_to_fd(" NAD_DoutEntering_ARG << fd << ")");
   if (self->m_request < 6)
   {
     std::stringstream ss;
@@ -192,5 +189,5 @@ void Socket::VT_impl::write_to_fd(evio::OutputDevice* _self, int fd)
     Dout(dc::notice, "Wrote \"" << libcwd::buf2str(ss.str().data(), ss.str().length()) << "\".");
   }
   else
-    self->stop_output_device();
+    NAD_CALL(self->stop_output_device);
 }

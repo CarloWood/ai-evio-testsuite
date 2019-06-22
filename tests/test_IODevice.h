@@ -460,44 +460,44 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
 
   struct VT_impl : evio::InputDevice::VT_impl, evio::OutputDevice::VT_impl
   {
-    static void read_from_fd(evio::InputDevice* _self, int fd)
+    static RefCountReleaser read_from_fd(evio::InputDevice* _self, int fd)
     {
-      DoutEntering(dc::notice|flush_cf, "TestSocket::read_from_fd(" << (void*)_self << ", " << fd << ")");
+      DoutEntering(dc::notice|flush_cf, "TestSocket::read_from_fd(" NAD_DoutEntering_ARG << (void*)_self << ", " << fd << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_read_from_fd_count++;
-      evio::InputDevice::VT_impl::read_from_fd(_self, fd);
+      return evio::InputDevice::VT_impl::read_from_fd(_self, fd);
     }
     static evio::RefCountReleaser read_returned_zero(evio::InputDevice* _self)
     {
-      DoutEntering(dc::notice|flush_cf, "TestSocket::read_returned_zero(" << (void*)_self << ")");
+      DoutEntering(dc::notice|flush_cf, "TestSocket::read_returned_zero(" NAD_DoutEntering_ARG << (void*)_self << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_read_returned_zero_count++;
       return evio::InputDevice::VT_impl::read_returned_zero(_self);
     }
     static evio::RefCountReleaser read_error(evio::InputDevice* _self, int err)
     {
-      DoutEntering(dc::notice|flush_cf, "TestSocket::read_error(" << (void*)_self << ", " << err << ")");
+      DoutEntering(dc::notice|flush_cf, "TestSocket::read_error(" NAD_DoutEntering_ARG << (void*)_self << ", " << err << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_read_error_count++;
       return evio::InputDevice::VT_impl::read_error(_self, err);
     }
     static evio::RefCountReleaser data_received(evio::InputDevice* _self, char const* new_data, size_t rlen)
     {
-      DoutEntering(dc::notice|flush_cf, "TestSocket::data_received(" << (void*)_self << ", \"" << libcwd::buf2str(new_data, rlen) << "\", " << rlen << ")");
+      DoutEntering(dc::notice|flush_cf, "TestSocket::data_received(" NAD_DoutEntering_ARG << (void*)_self << ", \"" << libcwd::buf2str(new_data, rlen) << "\", " << rlen << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_data_received_count++;
       return evio::InputDevice::VT_impl::data_received(_self, new_data, rlen);
     }
     static void write_to_fd(evio::OutputDevice* _self, int fd)
     {
-      DoutEntering(dc::notice|flush_cf, "TestSocket::write_to_fd(" << (void*)_self << ", " << fd << ")");
+      DoutEntering(dc::notice|flush_cf, "TestSocket::write_to_fd(" NAD_DoutEntering_ARG << (void*)_self << ", " << fd << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_write_to_fd_count++;
       OutputDevice::VT_impl::write_to_fd(_self, fd);
     }
     static void write_error(OutputDevice* _self, int err)
     {
-      DoutEntering(dc::notice|flush_cf, "TestSocket::write_error(" << _self << ", " << err << ")");
+      DoutEntering(dc::notice|flush_cf, "TestSocket::write_error(" NAD_DoutEntering_ARG << _self << ", " << err << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_write_error_count++;
       self->m_write_error_detected();
@@ -609,7 +609,7 @@ class TestInputDecoder : public evio::InputDecoder
   evio::RefCountReleaser decode(evio::MsgBlock&& msg) override
   {
     // Just print what was received.
-    DoutEntering(dc::notice, "TestInputDecoder::decode(\"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
+    DoutEntering(dc::notice, "TestInputDecoder::decode(\"" NAD_DoutEntering_ARG << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
     m_received += msg.get_size();
     // Stop after receiving just one message.
     evio::RefCountReleaser allow_deletion;

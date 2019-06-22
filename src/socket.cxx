@@ -15,7 +15,6 @@
 
 using evio::InputDecoder;
 using evio::MsgBlock;
-using evio::RefCountReleaser;
 using evio::Socket;
 using evio::OutputStream;
 using evio::SocketAddress;
@@ -24,7 +23,7 @@ using evio::GetThread;
 class InputPrinter : public InputDecoder
 {
  protected:
-  RefCountReleaser decode(MsgBlock&& msg) override;
+  NAD_DECL(decode, MsgBlock&& msg) override;
 };
 
 class MySocket : public Socket
@@ -114,12 +113,11 @@ int main()
   event_loop.join();
 }
 
-RefCountReleaser InputPrinter::decode(MsgBlock&& msg)
+NAD_DECL_CWDEBUG_ONLY(InputPrinter::decode, MsgBlock&& msg)
 {
   // Just print what was received.
-  DoutEntering(dc::notice, "InputPrinter::decode(\"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
+  DoutEntering(dc::notice, "InputPrinter::decode(" NAD_DoutEntering_ARG0 "\"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
   // Stop when the last message was received.
   if (msg.get_size() >= 17 && strncmp(msg.get_start() + msg.get_size() - 17, "#5</body></html>\n", 17) == 0)
     stop_input_device();
-  return {};
 }

@@ -18,7 +18,6 @@ using evio::MsgBlock;
 using evio::OutputStream;
 using evio::Socket;
 using evio::ListenSocket;
-using evio::RefCountReleaser;
 using evio::SocketAddress;
 using evio::GetThread;
 template<threadpool::Timer::time_point::rep count, typename Unit> using Interval = threadpool::Interval<count, Unit>;
@@ -32,7 +31,7 @@ class MyDecoder : public InputDecoder
   MyDecoder() : m_received(0) { }
 
  protected:
-  RefCountReleaser decode(MsgBlock&& msg) override;
+  NAD_DECL(decode, MsgBlock&& msg) override;
 };
 
 class MyAcceptedSocket : public Socket
@@ -53,26 +52,54 @@ class MyAcceptedSocket : public Socket
 
 class MyListenSocket : public ListenSocket<MyAcceptedSocket>
 {
- protected:
-  void new_connection(accepted_socket_type& accepted_socket)
+ public:
+  using VT_type = ListenSocket<MyAcceptedSocket>::VT_type;
+
+  struct VT_impl : ListenSocket<MyAcceptedSocket>::VT_impl
   {
-    Dout(dc::notice, "New connection to listen socket was accepted. Sending 10 kb of data.");
-    // Write 10 kbyte of data.
-    for (int n = 0; n < 100; ++n)
-      accepted_socket() << "START012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789THEEND" << std::endl;
-  }
+    // Called when a new connection is accepted.
+    static void new_connection(ListenSocket* UNUSED_ARG(_self), accepted_socket_type& accepted_socket)
+    {
+      Dout(dc::notice, "New connection to listen socket was accepted. Sending 10 kb of data.");
+      // Write 10 kbyte of data.
+      for (int n = 0; n < 100; ++n)
+        accepted_socket() << "START012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789THEEND" << std::endl;
+    }
+
+    // Virtual table of ListenSocket.
+    static constexpr VT_type VT{
+      /*ListenSocket*/
+        /*ListenSocketDevice*/
+      {   /*InputDevice*/
+        { nullptr,
+          read_from_fd,
+          hup,
+          exceptional,
+          read_returned_zero,
+          read_error,
+          data_received },
+        maybe_out_of_fds,
+        spawn_accepted },
+      new_connection       // Overridden
+    };
+  };
+
+  VT_type* clone_VT() override { return VT_ptr.clone(this); }
+  utils::VTPtr<MyListenSocket, ListenSocket<MyAcceptedSocket>> VT_ptr;
+
+  MyListenSocket() : VT_ptr(this) { }
 };
 
 class BurstSocket : public Socket
 {
   private:
-   MyDecoder m_input;
+//   MyDecoder m_input;
    OutputStream m_output;
 
   public:
    BurstSocket()
    {
-     input(m_input);
+//     input(m_input);
      output(m_output);
    }
 
@@ -109,7 +136,7 @@ int main()
           [&timer, listen_sock]()
           {
             timer.release_callback();
-            listen_sock->close();
+            NAD_PUBLIC_CALL(listen_sock->close);
             evio::EventLoopThread::instance().bump_terminate();
           });
     }
@@ -124,13 +151,19 @@ int main()
         sockets[s] = evio::create<BurstSocket>();
       std::this_thread::sleep_for(std::chrono::milliseconds(400));
       for (size_t s = 0; s < sockets.size(); ++s)
+      {
         sockets[s]->connect(listen_address);
+        std::this_thread::sleep_for(std::chrono::milliseconds(4));
+      }
       std::this_thread::sleep_for(std::chrono::milliseconds(400));
       for (size_t s = 0; s < sockets.size(); ++s)
         sockets[s]->write_burst();
       std::this_thread::sleep_for(std::chrono::milliseconds(400));
       for (size_t s = 0; s < sockets.size(); ++s)
+      {
         sockets[s]->write_burst();
+        //sockets[s]->flush_output_device();
+      }
     }
 
     event_loop.join();
@@ -143,13 +176,12 @@ int main()
   Dout(dc::notice, "Leaving main...");
 }
 
-evio::RefCountReleaser MyDecoder::decode(MsgBlock&& msg)
+NAD_DECL_CWDEBUG_ONLY(MyDecoder::decode, MsgBlock&& msg)
 {
   // Just print what was received.
-  DoutEntering(dc::notice, "MyDecoder::decode(\"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
+  DoutEntering(dc::notice, "MyDecoder::decode(" NAD_DoutEntering_ARG0 "\"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
   m_received += msg.get_size();
   // Stop when the last message was received.
   if (m_received == 10200)
     stop_input_device();
-  return {};
 }

@@ -15,8 +15,31 @@ using namespace evio;
 class TestInputDevice : public InputDevice
 {
  public:
+  using VT_type = InputDevice::VT_type;
+
+  struct VT_impl : InputDevice::VT_impl
+  {
+    static NAD_DECL(read_from_fd, InputDevice* self, int fd); // Read thread.
+
+    // Virtual table of TestInputDevice.
+    static constexpr VT_type VT{
+      /*InputDevice*/
+      nullptr,
+      read_from_fd,             // override
+      hup,
+      exceptional,
+      read_returned_zero,
+      read_error,
+      data_received,
+    };
+  };
+
+  VT_type* clone_VT() override { return VT_ptr.clone(this); }
+  utils::VTPtr<TestInputDevice, InputDevice> VT_ptr;
+
   TestInputDevice() : VT_ptr(this) { }
 
+ public:
   void init(int fd)
   {
     FileDescriptor::init(fd);
@@ -28,34 +51,6 @@ class TestInputDevice : public InputDevice
     // Therefore it is not necessary to call input().
     start_input_device(state_t::wat(m_state));
   }
-
- public:
-  using VT_type = InputDevice::VT_type;
-
-  struct VT_impl : InputDevice::VT_impl
-  {
-    static void read_from_fd(InputDevice* self, int fd); // Read thread.
-
-    // Virtual table of TestInputDevice.
-    static constexpr VT_type VT{
-      /*InputDevice*/
-      nullptr,
-      read_from_fd,
-      hup,
-      exceptional,
-      read_returned_zero,
-      read_error,
-      data_received,
-    };
-  };
-
-  // Make a deep copy of VT_ptr.
-  VT_type* clone_VT() override { return VT_ptr.clone(this); }
-
-  utils::VTPtr<TestInputDevice, InputDevice> VT_ptr;
-
- protected:
-  void read_from_fd(int fd) { VT_ptr->_read_from_fd(this, fd); }
 };
 
 class TestOutputDevice : public OutputDevice
@@ -65,7 +60,7 @@ class TestOutputDevice : public OutputDevice
 
   struct VT_impl : OutputDevice::VT_impl
   {
-    static void write_to_fd(OutputDevice* self, int fd);
+    static NAD_DECL(write_to_fd, OutputDevice* self, int fd);
 
     static constexpr VT_type VT{
       /*OutputDevice*/
@@ -127,9 +122,9 @@ int main()
 }
 
 // Read thread.
-void TestInputDevice::VT_impl::read_from_fd(evio::InputDevice* _self, int fd)
+NAD_DECL(TestInputDevice::VT_impl::read_from_fd, evio::InputDevice* _self, int fd)
 {
-  DoutEntering(dc::notice, "TestInputDevice::read_from_fd(" << fd << ")");
+  DoutEntering(dc::notice, "TestInputDevice::read_from_fd(" NAD_DoutEntering_ARG0 << fd << ")");
 
   char buf[256];
   ssize_t len;
@@ -144,15 +139,15 @@ void TestInputDevice::VT_impl::read_from_fd(evio::InputDevice* _self, int fd)
   {
     TestInputDevice* self = static_cast<TestInputDevice*>(_self);
     EventLoopThread::instance().stop_running(); // Terminate EventLoopThread.
-    self->close();                              // Remove this object.
+    self->close(need_allow_deletion);           // Remove this object.
   }
 }
 
 // Write thread.
-void TestOutputDevice::VT_impl::write_to_fd(OutputDevice* _self, int fd)
+NAD_DECL(TestOutputDevice::VT_impl::write_to_fd, OutputDevice* _self, int fd)
 {
   TestOutputDevice* self = static_cast<TestOutputDevice*>(_self);
-  DoutEntering(dc::notice, "TestOutputDevice::write_to_fd(" << fd << ")");
+  DoutEntering(dc::notice, "TestOutputDevice::write_to_fd(" NAD_DoutEntering_ARG << fd << ")");
   [[maybe_unused]] int unused = ::write(fd, "Hello World\n", 12);
-  self->stop_output_device();
+  NAD_CALL(self->stop_output_device);
 }

@@ -34,8 +34,7 @@ class MyInputDecoder : public evio::InputDecoder
 
   evio::RefCountReleaser decode(evio::MsgBlock&& CWDEBUG_ONLY(msg)) override
   {
-    DoutEntering(dc::notice, "MyInputDecoder::decode(\"" << libcwd::buf2str(msg.get_start(), msg.get_size()) << "\")");
-    return {};
+    DoutEntering(dc::notice, "MyInputDecoder::decode(" NAD_DoutEntering_ARG "\"" << libcwd::buf2str(msg.get_start(), msg.get_size()) << "\")");
   }
 
   void start_input_device()

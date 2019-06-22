@@ -18,7 +18,6 @@ using evio::MsgBlock;
 using evio::OutputStream;
 using evio::Socket;
 using evio::ListenSocket;
-using evio::RefCountReleaser;
 using evio::SocketAddress;
 using evio::GetThread;
 template<threadpool::Timer::time_point::rep count, typename Unit> using Interval = threadpool::Interval<count, Unit>;
@@ -34,46 +33,12 @@ class MyDecoder : public InputDecoder
   MyDecoder() CWDEBUG_ONLY(: m_received(0)) { }
 
  protected:
-  RefCountReleaser decode(MsgBlock&& msg) override;
+  NAD_DECL(decode, MsgBlock&& msg) override;
 };
 
-// This is the type of the accepted sockets when a new client connects to our listen socket.
+// This is the type of the accepted socket when a new client connects to our listen socket.
 // It registers both input and output - but also doesn't write anything.
 class MyAcceptedSocket : public Socket
-{
- private:
-  MyDecoder m_input;
-  OutputStream m_output;
-
- public:
-  MyAcceptedSocket()
-  {
-    input(m_input);
-    output(m_output);
-  }
-
- protected:
-  virtual RefCountReleaser read_returned_zero()
-  {
-    Dout(dc::notice, "*** DISCONNECTED ***");
-    return close_input_device();
-  }
-};
-
-// The type of our listen socket: for each incoming connection a MyAcceptedSocket is spawned.
-class MyListenSocket : public ListenSocket<MyAcceptedSocket>
-{
- protected:
-  void new_connection(accepted_socket_type& UNUSED_ARG(accepted_socket))
-  {
-    Dout(dc::notice, "New connection to listen socket was accepted.");
-  }
-};
-
-// The type of the socket that we use to connect to our own listen socket.
-// It detects that the 'connected()' signal is received even though we
-// never write anything to the socket.
-class MySocket : public Socket
 {
  public:
   using VT_type = Socket::VT_type;
@@ -81,15 +46,11 @@ class MySocket : public Socket
   struct VT_impl : Socket::VT_impl
   {
     // Override
-    static void connected(Socket* _self, bool DEBUG_ONLY(success))
+    static NAD_DECL(read_returned_zero, InputDevice* _self)
     {
-      MySocket* self = static_cast<MySocket*>(_self);
-      Dout(dc::notice, (success ? "*** CONNECTED ***" : "*** FAILED TO CONNECT ***"));
-      ASSERT((self->m_connected_flags & (is_connected|is_disconnected)) == (success ? is_connected : is_disconnected));
-      self->m_connected = true;
-      // By immediately disconnecting again we cause a connection reset by peer on the otherside,
-      // which causes MyAcceptedSocket::read_returned_zero() to be called. See above.
-      self->close();
+      Dout(dc::notice, "*** DISCONNECTED ***");
+      //MyAcceptedSocket* self = static_cast<MyAcceptedSocket*>(_self);
+      NAD_CALL(evio::InputDevice::VT_impl::read_returned_zero, _self);
     }
 
     static constexpr VT_type VT{
@@ -113,15 +74,108 @@ class MySocket : public Socket
 
   // Make a deep copy of VT_ptr.
   VT_type* clone_VT() override { return VT_ptr.clone(this); }
+  utils::VTPtr<MyAcceptedSocket, Socket> VT_ptr;
 
-  utils::VTPtr<Socket, InputDevice, OutputDevice> VT_ptr;
+  MyAcceptedSocket() : VT_ptr(this)
+  {
+    input(m_input);
+    output(m_output);
+  }
+
+ private:
+  MyDecoder m_input;
+  OutputStream m_output;
+};
+
+// The type of our listen socket: for each incoming connection a MyAcceptedSocket is spawned.
+class MyListenSocket : public ListenSocket<MyAcceptedSocket>
+{
+ public:
+  using VT_type = ListenSocket<MyAcceptedSocket>::VT_type;
+
+  struct VT_impl : ListenSocket<MyAcceptedSocket>::VT_impl
+  {
+    // Called when a new connection is accepted.
+    static void new_connection(ListenSocket* _self, accepted_socket_type& UNUSED_ARG(accepted_socket))
+    {
+      Dout(dc::notice, "New connection to listen socket was accepted.");
+      _self->close();
+    }
+
+    // Virtual table of ListenSocket.
+    static constexpr VT_type VT{
+      /*ListenSocket*/
+        /*ListenSocketDevice*/
+      {   /*InputDevice*/
+        { nullptr,
+          read_from_fd,
+          hup,
+          exceptional,
+          read_returned_zero,
+          read_error,
+          data_received },
+        maybe_out_of_fds,
+        spawn_accepted },
+      new_connection       // Overridden
+    };
+  };
+
+  VT_type* clone_VT() override { return VT_ptr.clone(this); }
+  utils::VTPtr<MyListenSocket, ListenSocket<MyAcceptedSocket>> VT_ptr;
+
+  MyListenSocket() : VT_ptr(this) { }
+};
+
+// The type of the socket that we use to connect to our own listen socket.
+// It detects that the 'connected()' signal is received even though we
+// never write anything to the socket.
+class MySocket : public Socket
+{
+ public:
+  using VT_type = Socket::VT_type;
+
+  struct VT_impl : Socket::VT_impl
+  {
+    // Override
+    static NAD_DECL(connected, Socket* _self, bool DEBUG_ONLY(success))
+    {
+      MySocket* self = static_cast<MySocket*>(_self);
+      Dout(dc::notice, (success ? "*** CONNECTED ***" : "*** FAILED TO CONNECT ***"));
+      ASSERT((self->m_connected_flags & (is_connected|is_disconnected)) == (success ? is_connected : is_disconnected));
+      self->m_connected = true;
+      // By immediately disconnecting again we cause a connection reset by peer on the otherside,
+      // which causes MyAcceptedSocket::read_returned_zero() to be called. See above.
+      NAD_CALL(self->close);
+    }
+
+    static constexpr VT_type VT{
+      /*Socket*/
+        /*InputDevice*/
+      { nullptr,
+        read_from_fd,
+        hup,
+        exceptional,
+        read_returned_zero,
+        read_error,
+        data_received },
+        /*OutputDevice*/
+      { nullptr,
+        write_to_fd,
+        write_error },
+      connected,
+      disconnected
+    };
+  };
+
+  // Make a deep copy of VT_ptr.
+  VT_type* clone_VT() override { return VT_ptr.clone(this); }
+  utils::VTPtr<MySocket, Socket> VT_ptr;
+
+  MySocket() : VT_ptr(this), m_connected(false) { }
+  ~MySocket() { ASSERT(m_connected); }
 
  private:
   bool m_connected;
-
- public:
-  MySocket() : VT_ptr(this), m_connected(false) { }
-  ~MySocket() { ASSERT(m_connected); }
 };
 
 int main()
@@ -175,11 +229,9 @@ int main()
   Dout(dc::notice, "Leaving main...");
 }
 
-evio::RefCountReleaser MyDecoder::decode(MsgBlock&& CWDEBUG_ONLY(msg))
+NAD_DECL(MyDecoder::decode, MsgBlock&& CWDEBUG_ONLY(msg))
 {
-  RefCountReleaser need_allow_deletion;
   // Just print what was received.
-  DoutEntering(dc::notice, "MyDecoder::decode(\"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
+  DoutEntering(dc::notice, "MyDecoder::decode(" NAD_DoutEntering_ARG0 "\"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
   Debug(m_received += msg.get_size());
-  return need_allow_deletion;
 }

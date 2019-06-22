@@ -327,7 +327,7 @@ class StreamBuf_InputDecoder : public evio::InputDecoder
 
   evio::RefCountReleaser decode(evio::MsgBlock&& CWDEBUG_ONLY(msg)) override
   {
-    DoutEntering(dc::notice, "StreamBuf_InputDecoder::decode(\"" << libcwd::buf2str(msg.get_start(), msg.get_size()) << "\")");
+    DoutEntering(dc::notice, "StreamBuf_InputDecoder::decode(\"" NAD_DoutEntering_ARG << libcwd::buf2str(msg.get_start(), msg.get_size()) << "\")");
     return {};
   }
 };

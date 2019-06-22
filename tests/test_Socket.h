@@ -48,8 +48,8 @@ class MyListenSocket : public evio::ListenSocket<MyAcceptedSocket>
     static void new_connection(ListenSocket* self, accepted_socket_type& accepted_socket)
     {
       Dout(dc::notice, "New connection to listen socket was accepted. Sending 10 kb of data.");
-      // Write 10 kbyte of data.
-      for (int n = 0; n < 1000; ++n)
+      // Write 10 Mbyte of data.
+      for (int n = 0; n < 100000; ++n)
         accepted_socket() << "START012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789THEEND\n";
       accepted_socket() << std::flush;
       accepted_socket.flush_output_device();
@@ -177,7 +177,7 @@ TEST(Socket, Constructor)
       // Connect a socket to the listen socket.
       auto socket = evio::create<MyClientSocket>();
       //socket->output(socket, 1024 - 32, 4096, 1000000);
-      socket->input(decoder, 1024 - 32, 4096, 1000000);
+      socket->input(decoder, 1024 - evio::block_overhead_c, 4096, 100000000);
       socket->connect(listen_address);
       socket->flush_output_device();
     }
@@ -188,17 +188,19 @@ TEST(Socket, Constructor)
   {
     Dout(dc::warning, error);
   }
+  catch (std::exception const& error)
+  {
+    DoutFatal(dc::core, error.what());
+  }
 }
 
-evio::RefCountReleaser MyDecoder::decode(evio::MsgBlock&& msg)
+evio::RefCountReleaser MyDecoder::decode(int& need_allow_deletion, evio::MsgBlock&& msg)
 {
   // Just print what was received.
-  DoutEntering(dc::notice, "MyDecoder::decode(\"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
+  DoutEntering(dc::notice, "MyDecoder::decode(\"" NAD_DoutEntering_ARG << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
   m_received += msg.get_size();
   Dout(dc::notice, "m_received = " << m_received);
   // Stop when the last message was received.
-  evio::RefCountReleaser needs_allow_deletion;
   if (m_received == 102000)
-    needs_allow_deletion = close_input_device();
-  return needs_allow_deletion;
+    close_input_device(need_allow_deletion);
 }
