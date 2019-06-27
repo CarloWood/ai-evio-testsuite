@@ -32,7 +32,7 @@ class MySocket : public Socket
   InputPrinter m_input_printer;
 
  public:
-  MySocket() { input(m_input_printer); }
+  MySocket() { set_sink(m_input_printer); }
 };
 
 #ifdef CWDEBUG
@@ -77,7 +77,7 @@ int main()
 #ifdef CWDEBUG
         Mark m3;
 #endif
-        socket[i]->output(output_stream[i]);
+        socket[i]->set_source(output_stream[i]);
       }
     }
     for (int i = 0; i < number_of_sockets; ++i)

@@ -146,7 +146,7 @@ void Socket::connect_to_server(char const* remote_host, int remote_port)
   init(fd_remote);
   state_t::wat state_w(m_state);
   // This class does not use input/output buffers but directly overrides read_from_fd and write_to_fd.
-  // Therefore it is not necessary to call input() and output().
+  // Therefore it is not necessary to call set_sink() and set_source().
   start_input_device(state_w);
   start_output_device(state_w);
 }

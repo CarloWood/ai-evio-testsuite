@@ -78,8 +78,8 @@ class MyAcceptedSocket : public Socket
 
   MyAcceptedSocket() : VT_ptr(this)
   {
-    input(m_input);
-    output(m_output);
+    set_sink(m_input);
+    set_source(m_output);
   }
 
  private:
@@ -215,7 +215,7 @@ int main()
     {
       // Connect a socket to the listen socket.
       auto socket = evio::create<MySocket>();
-      socket->input(decoder);
+      socket->set_sink(decoder);
       socket->connect(listen_address);
     }
 

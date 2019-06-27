@@ -43,8 +43,8 @@ class MyAcceptedSocket : public Socket
  public:
   MyAcceptedSocket()
   {
-    input(m_input);
-    output(m_output);
+    set_sink(m_input);
+    set_source(m_output);
   }
 
   OutputStream& operator()() { return m_output; }
@@ -99,8 +99,8 @@ class BurstSocket : public Socket
   public:
    BurstSocket()
    {
-//     input(m_input);
-     output(m_output);
+//     set_sink(m_input);
+     set_source(m_output);
    }
 
    void write_burst()

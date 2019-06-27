@@ -32,19 +32,38 @@ int main()
   {
     boost::intrusive_ptr<PersistentInputFile> device2;
     {
-      // Open a buffered output file that uses a buffer with a minimum block size of 64 bytes.
-      auto device1 = create<File>();
-      OutputStream output1;
-      device1->output(output1, 64);
-      device1->open("blah.txt", std::ios_base::trunc);
+      // We want to create the following data flow:
+      //
+      //                   output1 __
+      //                             \                                                    .
+      // 'data written to an ostream' O-->O file "blah.txt" O-->O file "blah2.txt"
+      //                                 /                 /     \                        .
+      //                      device1 __/       device2 __/       \__ device3
+      //
+      // The connection between device2 and device3 is made first, before writing data
+      // to "blah.txt". But device2 is a PersistentInputFile: it will keep monitoring
+      // the file and read any newly appended data as it appears (like 'tail -f').
+      //
+      // Aka, we'll do more or less the equivalent of the following:
+      //
+      // $ echo > "blah.txt"
+      // $ nohup tail -f "blah.txt" > "blah2.txt" 2>/dev/null &
+      // $ echo "data" >> blah.txt"
+      //
+      // and observe that "data" ends up in both files.
 
-      // Open an input file that reads 'persistent' from blah.txt
-      // and link with an output file that writes to blah2.txt.
+      // Open a buffered output file that uses a buffer with a minimum block size of 96 bytes and that we can write to using an ostream.
+      OutputStream output1;                                             // The std::ostream sink.
+      auto device1 = create<File>();                                    // A File device.
+      device1->set_source(output1, 128 - evio::block_overhead_c);       // Create a buffer that device1 will read from and output1 will write to.
+      device1->open("blah.txt", std::ios_base::trunc);                  // Open and truncate the file "blah.txt".
+
+      // Open an input file that reads 'persistent' from "blah.txt" and link it with an output file that writes to "blah2.txt".
       device2 = create<PersistentInputFile>();
       auto device3 = create<File>();
-      device3->output(device2, 1024, 4096, 1000000);     // Read from device2; 'output' refers to the fact that we write output to device3 (blah2.txt).
-      device2->open("blah.txt", std::ios_base::in);
-      device3->open("blah2.txt", std::ios_base::trunc);
+      device3->set_source(device2, 1024 - evio::block_overhead_c, 4096, 1000000);       // Create a buffer that device3 will read from and device2 will write to.
+      device2->open("blah.txt", std::ios_base::in);                     // device2 reads from "blah.txt" (when new data is appended to it).
+      device3->open("blah2.txt", std::ios_base::trunc);                 // device3 creates a new file "blah2.txt" and writes to that.
 
       // Give device2 time to read till EOF. This tests the persistent-ness. If it wasn't
       // persistent it would close itself when reaching EOF and nothing would be written
@@ -60,7 +79,8 @@ int main()
       Debug(dc::evio.on());
       Dout(dc::finish, "done");
       // Actually (start) writing data to device1.
-      output1.flush();  // This is just ostream::flush().
+      output1.flush();  // This is just ostream::flush(). It doesn't actually flush the buffer, it tells
+                        // the library that the data that was written to the buffer is now ready to be read.
 
       // Destruct device pointers device1 and device3 - that tests that they aren't deleted before they are finished.
     }
@@ -70,7 +90,7 @@ int main()
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
     // Actually get rid of device2 (it won't disappear otherwise, since it is persistent).
-    device2->close();             // This causes device2 to be closed and deleted (and therefore (soonish?) device3 to also be deleted).
+    device2->close();   // This causes device2 to be closed and deleted (and therefore (soonish?) device3 to also be deleted).
     // Destruct device pointer device2 too (everything has already completed here though).
   }
   catch (AIAlert::Error const& error)
@@ -78,6 +98,6 @@ int main()
     Dout(dc::warning, error);
   }
 
-  event_loop.join();
+  event_loop.join();    // Cause the event loop thread to finish what it was doing (continue running until m_active == 0) before exiting and joining with main.
   Dout(dc::notice, "Leaving main()...");
 }

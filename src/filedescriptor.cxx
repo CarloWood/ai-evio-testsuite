@@ -48,7 +48,7 @@ class TestInputDevice : public InputDevice
   void start()
   {
     // This object does not use a buffer, but instead overrides read_from_fd directly.
-    // Therefore it is not necessary to call input().
+    // Therefore it is not necessary to call set_sink().
     start_input_device(state_t::wat(m_state));
   }
 };
@@ -86,7 +86,7 @@ class TestOutputDevice : public OutputDevice
   void start()
   {
     // This object does not use a buffer, but instead overrides write_to_fd directly.
-    // Therefore it is not necessary to call output().
+    // Therefore it is not necessary to call set_source().
     start_output_device(state_t::wat(m_state));
   }
 };
