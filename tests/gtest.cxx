@@ -4,12 +4,12 @@
 #include <boost/program_options.hpp>
 
 #if 1
-//#include "test_set_XXXsockbuf.h"
-//#include "test_print_hostent_on.h"
-//#include "test_size_of_addr.h"
-//#include "test_SocketAddress.h"
-//#include "test_RefCountReleaser.h"
-//#include "test_FileDescriptor.h"
+#include "test_set_XXXsockbuf.h"
+#include "test_print_hostent_on.h"
+#include "test_size_of_addr.h"
+#include "test_SocketAddress.h"
+#include "test_RefCountReleaser.h"
+#include "test_FileDescriptor.h"
 #include "test_IODevice.h"
 #include "test_InputDecoder.h"
 #include "test_OutputStream.h"
