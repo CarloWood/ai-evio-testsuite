@@ -9,7 +9,9 @@
 #include "test_size_of_addr.h"
 #include "test_SocketAddress.h"
 #include "test_RefCountReleaser.h"
+#ifdef CWDEBUG  // Only compiles with CWDEBUG defined.
 #include "test_FileDescriptor.h"
+#endif
 #include "test_IODevice.h"
 #include "test_InputDecoder.h"
 #include "test_OutputStream.h"

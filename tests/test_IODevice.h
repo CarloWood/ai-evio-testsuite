@@ -80,6 +80,7 @@ struct InputDevice : public NoEpollInputDevice
     state_w->m_flags.set_regular_file();
   }
 
+#ifdef CWDEBUG
   int get_fd() const
   {
     return evio::InputDevice::get_fd();
@@ -89,6 +90,7 @@ struct InputDevice : public NoEpollInputDevice
   {
     return evio::FileDescriptor::get_flags();
   }
+#endif
 };
 
 struct OutputDevice : public NoEpollOutputDevice
@@ -157,6 +159,7 @@ struct OutputDevice : public NoEpollOutputDevice
     set_source(m_output);
   }
 
+#ifdef CWDEBUG
   int get_fd() const
   {
     return evio::OutputDevice::get_fd();
@@ -166,6 +169,7 @@ struct OutputDevice : public NoEpollOutputDevice
   {
     return evio::FileDescriptor::get_flags();
   }
+#endif
 };
 
 // Test Fixture
@@ -262,6 +266,8 @@ class TestIODevice : public TestIODeviceNoInit
   }
 };
 
+#ifdef CWDEBUG
+
 TEST_F(TestIODeviceNoInit, SetUpAndTearDown)
 {
   EXPECT_EQ(m_input_device->get_fd(), -1);
@@ -273,6 +279,8 @@ TEST_F(TestIODevice, SetUpAndTearDown)
   EXPECT_EQ(m_input_device->get_fd(), pipefd[0]);
   EXPECT_EQ(m_output_device->get_fd(), pipefd[1]);
 }
+
+#endif // CWDEBUG
 
 TEST_F(TestIODevice, StartStop)
 {
@@ -846,6 +854,7 @@ TEST_F(IODeviceFixture, write_error)
   EXPECT_EQ(io_device->write_error_count(), 1);
 }
 
+#ifdef CWDEBUG
 void test_is_Closed(boost::intrusive_ptr<InputDevice> input_device)
 {
   EXPECT_FALSE(input_device->get_flags().is_r_open());
@@ -1021,3 +1030,5 @@ TEST_F(TestIODevice, DeviceStatesAddedFlush)
   CALL(test_is_Closed(m_output_device));
   EXPECT_TRUE(output_releaser);
 }
+
+#endif // CWDEBUG

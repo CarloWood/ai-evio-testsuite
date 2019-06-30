@@ -37,13 +37,17 @@ class FileDescriptor : public virtual evio::FileDescriptor
   void test_fd_is_minus_one() const
   {
     ASSERT(m_fd == -1);
+#ifdef CWDEBUG
     EXPECT_EQ(get_fd(), m_fd);
+#endif
   }
 
   void test_fd_is_set() const
   {
     ASSERT(m_fd != -1);
+#ifdef CWDEBUG
     EXPECT_EQ(get_fd(), m_fd);
+#endif
   }
 
   void test_close_input_device_does_nothing()
