@@ -139,7 +139,7 @@ NAD_DECL(TestInputDevice::VT_impl::read_from_fd, evio::InputDevice* _self, int f
   {
     TestInputDevice* self = static_cast<TestInputDevice*>(_self);
     EventLoopThread::instance().stop_running(); // Terminate EventLoopThread.
-    self->close(need_allow_deletion);           // Remove this object.
+    NAD_CALL(self->close);      // Remove this object.
   }
 }
 

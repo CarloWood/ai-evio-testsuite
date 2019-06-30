@@ -7,6 +7,8 @@
 #include <libcwd/buf2str.h>
 #endif
 
+using evio::MsgBlock;
+
 class MyDecoder : public evio::InputDecoder
 {
  private:
@@ -17,7 +19,7 @@ class MyDecoder : public evio::InputDecoder
   ~MyDecoder() { Dout(dc::notice, "~MyDecoder() [" << this << "]"); }
 
  protected:
-  evio::RefCountReleaser decode(evio::MsgBlock&& msg) override;
+  NAD_DECL(decode, MsgBlock&& msg) override;
 };
 
 class MyAcceptedSocket : public evio::Socket
@@ -29,8 +31,8 @@ class MyAcceptedSocket : public evio::Socket
  public:
   MyAcceptedSocket()
   {
-    input(m_input);
-    output(m_output);
+    set_sink(m_input);
+    set_source(m_output);
   }
   ~MyAcceptedSocket() { Dout(dc::notice, "~MyAcceptedSocket() [" << this << "]"); }
 
@@ -91,7 +93,7 @@ class MyClientSocket : public evio::Socket
   struct VT_impl : Socket::VT_impl
   {
     // Override
-    static void connected(Socket* _self, bool DEBUG_ONLY(success))
+    static NAD_DECL_UNUSED_ARG(connected, Socket* _self, bool DEBUG_ONLY(success))
     {
       MyClientSocket* self = static_cast<MyClientSocket*>(_self);
       Dout(dc::notice, (success ? "*** CONNECTED ***" : "*** FAILED TO CONNECT ***"));
@@ -176,8 +178,8 @@ TEST(Socket, Constructor)
     {
       // Connect a socket to the listen socket.
       auto socket = evio::create<MyClientSocket>();
-      //socket->output(socket, 1024 - 32, 4096, 1000000);
-      socket->input(decoder, 1024 - evio::block_overhead_c, 4096, 100000000);
+      //socket->set_source(socket, 1024 - 32, 4096, 1000000);
+      socket->set_sink(decoder, 1024 - evio::block_overhead_c, 4096, 100000000);
       socket->connect(listen_address);
       socket->flush_output_device();
     }
@@ -194,7 +196,7 @@ TEST(Socket, Constructor)
   }
 }
 
-evio::RefCountReleaser MyDecoder::decode(int& need_allow_deletion, evio::MsgBlock&& msg)
+NAD_DECL(MyDecoder::decode, MsgBlock&& msg)
 {
   // Just print what was received.
   DoutEntering(dc::notice, "MyDecoder::decode(\"" NAD_DoutEntering_ARG << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
@@ -202,5 +204,5 @@ evio::RefCountReleaser MyDecoder::decode(int& need_allow_deletion, evio::MsgBloc
   Dout(dc::notice, "m_received = " << m_received);
   // Stop when the last message was received.
   if (m_received == 102000)
-    close_input_device(need_allow_deletion);
+    NAD_CALL(close_input_device);
 }

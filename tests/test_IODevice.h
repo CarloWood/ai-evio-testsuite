@@ -2,19 +2,47 @@
 #include "evio/SocketAddress.h"
 #include "evio/inet_support.h"
 #include "evio/EventLoopThread.h"
-#include "threadpool/AIThreadPool.h"
 #ifdef CWDEBUG
 #include "libcwd/buf2str.h"
 #endif
+#include "NoEpollDevices.h"
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/socket.h>
 
+using evio::RefCountReleaser;
+
+#include "MyDummyDecoder.h"
+
 // Work around the fact that InputDevice and OutputDevice have a protected constructor and protected methods.
 
-struct InputDevice : public evio::InputDevice
+struct InputDevice : public NoEpollInputDevice
 {
-  using evio::InputDevice::InputDevice;
+  using VT_type = evio::InputDevice::VT_type;
+
+  struct VT_impl : evio::InputDevice::VT_impl
+  {
+    static NAD_DECL_UNUSED_ARG(read_from_fd, evio::InputDevice* UNUSED_ARG(self), int UNUSED_ARG(fd)) { } // override
+
+    // Virtual table of ListenSocketDevice.
+    static constexpr VT_type VT{
+      /*InputDevice*/
+      nullptr,
+      read_from_fd,
+      nullptr,
+      nullptr,
+      nullptr,
+      nullptr,
+      nullptr
+    };
+  };
+
+  VT_type* clone_VT() override { return VT_ptr.clone(this); }
+  utils::VTPtr<InputDevice, evio::InputDevice> VT_ptr;
+
+  InputDevice() : VT_ptr(this) { }
+
+  MyDummyDecoder m_decoder;
 
   void start_input_device()
   {
@@ -26,9 +54,11 @@ struct InputDevice : public evio::InputDevice
     evio::InputDevice::stop_input_device();
   }
 
-  evio::RefCountReleaser remove_input_device()
+  NAD_DECL_PUBLIC(remove_input_device)
   {
-    return evio::InputDevice::remove_input_device();
+    NAD_PUBLIC_BEGIN;
+    NAD_CALL_FROM_PUBLIC(evio::InputDevice::remove_input_device, state_t::wat(m_state));
+    NAD_PUBLIC_END;
   }
 
   void disable_input_device()
@@ -44,6 +74,10 @@ struct InputDevice : public evio::InputDevice
   void init(int fd)
   {
     evio::InputDevice::init(fd);
+    set_sink(m_decoder);
+    // Set this to regular_file in order to avoid epoll being called (which isn't initialized).
+    state_t::wat state_w(m_state);
+    state_w->m_flags.set_regular_file();
   }
 
   int get_fd() const
@@ -57,28 +91,54 @@ struct InputDevice : public evio::InputDevice
   }
 };
 
-struct OutputDevice : public evio::OutputDevice
+struct OutputDevice : public NoEpollOutputDevice
 {
-  using evio::OutputDevice::OutputDevice;
+  using VT_type = evio::OutputDevice::VT_type;
+
+  struct VT_impl : public evio::OutputDevice::VT_impl
+  {
+    static NAD_DECL_UNUSED_ARG(write_to_fd, evio::OutputDevice* UNUSED_ARG(self), int UNUSED_ARG(fd)) { } // override
+
+    static constexpr VT_type VT{
+      /*OutputDevice*/
+      nullptr,
+      write_to_fd,
+      nullptr
+    };
+  };
+
+  // These two lines must be in THIS order (clone_VT first)!
+  VT_type* clone_VT() override { return VT_ptr.clone(this); }           // Make a deep copy of VT_ptr.
+  utils::VTPtr<OutputDevice, evio::OutputDevice> VT_ptr;                // Virtual table pointer of this instance.
+
+  OutputDevice() : VT_ptr(this) { }
+
+  evio::OutputStream m_output;
 
   void start_output_device()
   {
     evio::OutputDevice::start_output_device();
   }
 
-  evio::RefCountReleaser stop_output_device()
+  NAD_DECL_PUBLIC(stop_output_device)
   {
-    return evio::OutputDevice::stop_output_device();
+    NAD_PUBLIC_BEGIN;
+    NAD_CALL_FROM_PUBLIC(evio::OutputDevice::stop_output_device);
+    NAD_PUBLIC_END;
   }
 
-  evio::RefCountReleaser remove_output_device()
+  NAD_DECL_PUBLIC(remove_output_device)
   {
-    return evio::OutputDevice::remove_output_device();
+    NAD_PUBLIC_BEGIN;
+    NAD_CALL_FROM_PUBLIC(evio::OutputDevice::remove_output_device);
+    NAD_PUBLIC_END;
   }
 
-  evio::RefCountReleaser flush_output_device()
+  NAD_DECL_PUBLIC(flush_output_device)
   {
-    return evio::OutputDevice::flush_output_device();
+    NAD_PUBLIC_BEGIN;
+    NAD_CALL_PUBLIC(evio::OutputDevice::flush_output_device);
+    NAD_PUBLIC_END;
   }
 
   void disable_output_device()
@@ -94,6 +154,7 @@ struct OutputDevice : public evio::OutputDevice
   void init(int fd)
   {
     evio::OutputDevice::init(fd);
+    set_source(m_output);
   }
 
   int get_fd() const
@@ -109,7 +170,9 @@ struct OutputDevice : public evio::OutputDevice
 
 // Test Fixture
 
-class TestIODeviceNoInit : public testing::Test
+#include "EventLoopFixture.h"
+
+class TestIODeviceNoInit : public EventLoopFixture<testing::Test>
 {
  protected:
   int pipefd[2];
@@ -119,7 +182,11 @@ class TestIODeviceNoInit : public testing::Test
  protected:
   void SetUp() override
   {
-    DoutEntering(dc::notice, "TestIODeviceNoInit::SetUp()");
+#ifdef CWDEBUG
+    Dout(dc::notice, "v TestIODeviceNoInit::SetUp()");
+    debug::Mark setup;
+#endif
+    EventLoopFixture<testing::Test>::SetUp();
     int res = pipe2(pipefd, O_DIRECT | O_CLOEXEC);
     if (res == -1)
       perror("pipe2");
@@ -130,7 +197,10 @@ class TestIODeviceNoInit : public testing::Test
 
   void TearDown() override
   {
-    DoutEntering(dc::notice, "TestIODeviceNoInit::TearDown()");
+#ifdef CWDEBUG
+    Dout(dc::notice, "v TestIODeviceNoInit::TearDown()");
+    debug::Mark setup;
+#endif
     // Delete the device objects.
     m_input_device.reset();
     m_output_device.reset();
@@ -139,6 +209,7 @@ class TestIODeviceNoInit : public testing::Test
       close(pipefd[0]);
     if (evio::is_valid(pipefd[1]))
       close(pipefd[1]);
+    EventLoopFixture<testing::Test>::TearDown();
   }
 };
 
@@ -147,7 +218,10 @@ class TestIODevice : public TestIODeviceNoInit
  protected:
   void SetUp() override
   {
-    DoutEntering(dc::notice, "TestIODevice::SetUp()");
+#ifdef CWDEBUG
+    Dout(dc::notice, "v TestIODevice::SetUp()");
+    debug::Mark setup;
+#endif
     TestIODeviceNoInit::SetUp();
     m_input_device->init(pipefd[0]);
     m_output_device->init(pipefd[1]);
@@ -155,19 +229,26 @@ class TestIODevice : public TestIODeviceNoInit
 
   void TearDown() override
   {
-    DoutEntering(dc::notice, "TestIODevice::TearDown()");
+#ifdef CWDEBUG
+    Dout(dc::notice, "v TestIODevice::TearDown()");
+    debug::Mark setup;
+#endif
     if (m_input_device->is_active(evio::SingleThread()).is_momentary_true())
     {
-      auto need_allow_deletion = m_input_device->close_input_device();
+      NAD_PUBLIC_BEGIN;
+      NAD_CALL_PUBLIC(m_input_device->close_input_device);
       // is_momentary_true() here really means is_true() -- because we don't have an EventLoopThread running during this test, nor any other threads.
       // Therefore, this should always be true.
-      EXPECT_TRUE(need_allow_deletion); // To cancel inhibit_deletion of being added.
+      EXPECT_TRUE(nad_rcr); // To cancel inhibit_deletion of being added.
+      // No NAD_PUBLIC_END (immediately call allow_deletion()).
     }
     if (m_output_device->is_active(evio::SingleThread()).is_momentary_true())
     {
-      auto need_allow_deletion = m_output_device->close_output_device();
+      NAD_PUBLIC_BEGIN;
+      NAD_CALL_PUBLIC(m_output_device->close_output_device);
       // See comment above.
-      EXPECT_TRUE(need_allow_deletion); // To cancel inhibit_deletion of being added.
+      EXPECT_TRUE(nad_rcr); // To cancel inhibit_deletion of being added.
+      // No NAD_PUBLIC_END (immediately call allow_deletion()).
     }
     // Make sure these are really the last references.
     EXPECT_TRUE(m_input_device->unique().is_true());
@@ -177,6 +258,7 @@ class TestIODevice : public TestIODeviceNoInit
     // By now both file descriptors should be closed.
     EXPECT_FALSE(evio::is_valid(pipefd[0]));
     EXPECT_FALSE(evio::is_valid(pipefd[1]));
+    TestIODeviceNoInit::TearDown();
   }
 };
 
@@ -451,6 +533,7 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
   int m_read_error_count;
   int m_data_received_count;
   int m_write_error_count;
+  int m_real_fd;
   std::function<void()> m_write_error_detected;
 
  public:
@@ -460,48 +543,49 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
 
   struct VT_impl : evio::InputDevice::VT_impl, evio::OutputDevice::VT_impl
   {
-    static RefCountReleaser read_from_fd(evio::InputDevice* _self, int fd)
+    static NAD_DECL(read_from_fd, evio::InputDevice* _self, int fd)
     {
       DoutEntering(dc::notice|flush_cf, "TestSocket::read_from_fd(" NAD_DoutEntering_ARG << (void*)_self << ", " << fd << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_read_from_fd_count++;
-      return evio::InputDevice::VT_impl::read_from_fd(_self, fd);
+      NAD_CALL(evio::InputDevice::VT_impl::read_from_fd, _self, fd);
     }
-    static evio::RefCountReleaser read_returned_zero(evio::InputDevice* _self)
+    static NAD_DECL(read_returned_zero, evio::InputDevice* _self)
     {
       DoutEntering(dc::notice|flush_cf, "TestSocket::read_returned_zero(" NAD_DoutEntering_ARG << (void*)_self << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_read_returned_zero_count++;
-      return evio::InputDevice::VT_impl::read_returned_zero(_self);
+      NAD_CALL(evio::InputDevice::VT_impl::read_returned_zero, _self);
     }
-    static evio::RefCountReleaser read_error(evio::InputDevice* _self, int err)
+    static NAD_DECL(read_error, evio::InputDevice* _self, int err)
     {
       DoutEntering(dc::notice|flush_cf, "TestSocket::read_error(" NAD_DoutEntering_ARG << (void*)_self << ", " << err << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_read_error_count++;
-      return evio::InputDevice::VT_impl::read_error(_self, err);
+      self->unscrew_fd();
+      NAD_CALL(evio::InputDevice::VT_impl::read_error, _self, err);
     }
-    static evio::RefCountReleaser data_received(evio::InputDevice* _self, char const* new_data, size_t rlen)
+    static NAD_DECL(data_received, evio::InputDevice* _self, char const* new_data, size_t rlen)
     {
       DoutEntering(dc::notice|flush_cf, "TestSocket::data_received(" NAD_DoutEntering_ARG << (void*)_self << ", \"" << libcwd::buf2str(new_data, rlen) << "\", " << rlen << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_data_received_count++;
-      return evio::InputDevice::VT_impl::data_received(_self, new_data, rlen);
+      NAD_CALL(evio::InputDevice::VT_impl::data_received, _self, new_data, rlen);
     }
-    static void write_to_fd(evio::OutputDevice* _self, int fd)
+    static NAD_DECL(write_to_fd, evio::OutputDevice* _self, int fd)
     {
       DoutEntering(dc::notice|flush_cf, "TestSocket::write_to_fd(" NAD_DoutEntering_ARG << (void*)_self << ", " << fd << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_write_to_fd_count++;
-      OutputDevice::VT_impl::write_to_fd(_self, fd);
+      NAD_CALL(OutputDevice::VT_impl::write_to_fd, _self, fd);
     }
-    static void write_error(OutputDevice* _self, int err)
+    static NAD_DECL(write_error, OutputDevice* _self, int err)
     {
       DoutEntering(dc::notice|flush_cf, "TestSocket::write_error(" NAD_DoutEntering_ARG << _self << ", " << err << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_write_error_count++;
       self->m_write_error_detected();
-      OutputDevice::VT_impl::write_error(_self, err);
+      NAD_CALL(OutputDevice::VT_impl::write_error, _self, err);
     }
 
     static constexpr VT_type VT{
@@ -577,8 +661,16 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
 
   void screw_fd()
   {
+    m_real_fd = m_fd;
     m_fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
     ::close(m_fd);
+    Dout(dc::notice, "screw_fd(): overwrote m_fd with bad fd " << m_fd);
+  }
+
+  void unscrew_fd()
+  {
+    m_fd = m_real_fd;
+    Dout(dc::notice, "unscrew_fd(): restored m_fd with fd " << m_fd);
   }
 
   void set_write_error_callback(std::function<void()> cb)
@@ -606,71 +698,20 @@ class TestInputDecoder : public evio::InputDecoder
   void dont_stop() { m_stop_after_one_message = false; }
 
  protected:
-  evio::RefCountReleaser decode(evio::MsgBlock&& msg) override
+  NAD_DECL(decode, evio::MsgBlock&& msg) override
   {
     // Just print what was received.
     DoutEntering(dc::notice, "TestInputDecoder::decode(\"" NAD_DoutEntering_ARG << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
     m_received += msg.get_size();
     // Stop after receiving just one message.
-    evio::RefCountReleaser allow_deletion;
     if (m_stop_after_one_message)
-      allow_deletion = close_input_device();
-    return allow_deletion;
+      NAD_CALL(close_input_device);
   }
 };
 
 #include "HtmlPipeLineServerFixture.h"
 
-class EventLoopFixture : public HtmlPipeLineServerFixture
-{
- private:
-  AIThreadPool m_thread_pool;
-  evio::EventLoop* m_event_loop;
-  AIQueueHandle m_low_priority_handler;
-
- protected:
-  void SetUp()
-  {
-    DoutEntering(dc::notice, "EventLoopFixture::SetUp()");
-    HtmlPipeLineServerFixture::SetUp();
-    // Initialize signals.
-    AISignals signals({SIGPIPE});
-    [[maybe_unused]] AIQueueHandle high_priority_handler = m_thread_pool.new_queue(32);
-    [[maybe_unused]] AIQueueHandle medium_priority_handler = m_thread_pool.new_queue(32);
-    m_low_priority_handler = m_thread_pool.new_queue(16);
-    m_event_loop = new evio::EventLoop(m_low_priority_handler);
-  }
-
-  void TearDown()
-  {
-    DoutEntering(dc::notice, "EventLoopFixture::SetUp()");
-    // Fake "leaving the scope" of AIThreadPool and EventLoop...
-    // Don't use this yourself.
-    // The correct way to do this is:
-    //
-    // {
-    //   AIThreadPool thread_pool;
-    //   AIQueueHandle handler = thread_pool.new_queue(32);     // For example.
-    //   EventLoop event_loop(handler);
-    //
-    //   ...your code here...
-    //
-    //   event_loop.join();
-    // }
-
-    m_event_loop->join();
-    delete m_event_loop;
-    m_low_priority_handler.set_to_undefined();
-    {
-      // Destruct the thread pool.
-      m_thread_pool.change_number_of_threads_to(0);
-      AIThreadPool dummy(std::move(m_thread_pool));
-    }
-    HtmlPipeLineServerFixture::TearDown();
-  }
-};
-
-class IODeviceFixture : public EventLoopFixture
+class IODeviceFixture : public EventLoopFixture<HtmlPipeLineServerFixture>
 {
  protected:
   TestInputDecoder decoder;
@@ -681,12 +722,15 @@ class IODeviceFixture : public EventLoopFixture
  protected:
   void SetUp()
   {
-    DoutEntering(dc::notice, "IODeviceFixture::SetUp()");
-    EventLoopFixture::SetUp();
+#ifdef CWDEBUG
+    Dout(dc::notice, "v IODeviceFixture::SetUp()");
+    debug::Mark setup;
+#endif
+    EventLoopFixture<HtmlPipeLineServerFixture>::SetUp();
     io_device = evio::create<TestSocket>();
     Dout(dc::notice, "io_device = " << io_device.get());
-    io_device->input(decoder);
-    io_device->output(output);
+    io_device->set_sink(decoder);
+    io_device->set_source(output);
     CALL(io_device->connect());                                       // Because connect() calls start_input_device()...
   }
 
@@ -694,22 +738,26 @@ class IODeviceFixture : public EventLoopFixture
   {
     Dout(dc::notice, "IODeviceFixture::keep_alive()");
     keep_alive_device = evio::create<TestSocket>();
-    keep_alive_device->input(decoder);
+    keep_alive_device->set_sink(decoder);
     CALL(keep_alive_device->listen());
   }
 
   void TearDown()
   {
-    DoutEntering(dc::notice, "IODeviceFixture::TearDown()");
+#ifdef CWDEBUG
+    Dout(dc::notice, "v IODeviceFixture::TearDown()");
+    debug::Mark setup;
+#endif
     Dout(dc::notice|flush_cf, "Removing last boost::intrusive_ptr for " << io_device.get());
     io_device.reset();
     Dout(dc::notice|flush_cf, "Removed last boost::intrusive_ptr...");
-    EventLoopFixture::TearDown();
+    EventLoopFixture<HtmlPipeLineServerFixture>::TearDown();
   }
 };
 
 TEST_F(IODeviceFixture, write_to_fd_read_from_fd)
 {
+  decoder.dont_stop();                                                // Don't close the fd after reading one message.
   std::this_thread::sleep_for(std::chrono::milliseconds(100));        // ... during this sleep TestSocket::write_to_fd is called once, sees EOF and calls stop_input_device.
   EXPECT_EQ(io_device->write_to_fd_count(), 1);
 
@@ -719,16 +767,17 @@ TEST_F(IODeviceFixture, write_to_fd_read_from_fd)
   EXPECT_EQ(io_device->read_from_fd_count(), 0);
   EXPECT_EQ(io_device->read_returned_zero_count(), 0);
 
-  output << std::flush;                                               // This writes to the buffer and calls start_input_device(),
-  output << request_close(200);                                       // This is just written to the buffer again.
-  std::this_thread::sleep_for(std::chrono::milliseconds(1));          // so that TestSocket::write_to_fd is called again to write the buffer to the socket.
-  EXPECT_EQ(io_device->write_to_fd_count(), 2);
+  output << std::flush;                                               // This writes to the buffer and calls start_input_device()...
+  output << request_close(200);                                       // (this is just written to the buffer again)
+  std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  EXPECT_EQ(io_device->write_to_fd_count(), 2);                       // ...so that TestSocket::write_to_fd is called again to write the buffer to the socket.
   std::this_thread::sleep_for(std::chrono::milliseconds(199));        // That message is sent to the http server, which sends 200 ms later a message back that we receive again
   EXPECT_EQ(io_device->read_from_fd_count(), 0);                      // but not yet...
   std::this_thread::sleep_for(std::chrono::milliseconds(2));          // but now we should have...
-  EXPECT_EQ(io_device->read_from_fd_count(), 1);                      // causing a call to TestSocket::read_from_fd,
-  EXPECT_EQ(io_device->data_received_count(), 1);                     // which called data_received()
-  EXPECT_EQ(io_device->read_returned_zero_count(), 0);                // and not read_returned_zero().
+  // This is >= 1, because sometimes read() returns EAGAIN - causing a second call to read_from_fd.
+  EXPECT_GE(io_device->read_from_fd_count(), 1);                      // causing a call to TestSocket::read_from_fd,
+  EXPECT_EQ(io_device->data_received_count(), 1);                     // which called data_received().
+  EXPECT_EQ(io_device->read_returned_zero_count(), 1);                // read_from_fd continues reading till we reached EOF (or EGAIN).
 }
 
 TEST_F(IODeviceFixture, read_returned_zero)
@@ -760,7 +809,8 @@ TEST_F(IODeviceFixture, request_with_close)
   output << generate_request_with_close(1, 10) << std::flush;         // Server will wait 10 ms then write one message and immediately close the fd.
   std::this_thread::sleep_for(std::chrono::milliseconds(20));
   EXPECT_EQ(io_device->write_to_fd_count(), 2);                       // Same as above tests.
-  EXPECT_EQ(io_device->read_from_fd_count(), 2);                      // One for the message and one for the close.
+  // A value of 2 instead of 1 might happen sometimes.
+  EXPECT_GE(io_device->read_from_fd_count(), 1);                      // One for the message, and we now continue to read till EAGAIN - so also get the EOF (this is racy though).
   EXPECT_EQ(io_device->data_received_count(), 1);                     // One for the message.
   EXPECT_EQ(io_device->read_returned_zero_count(), 1);                // One for the close.
 }
@@ -774,7 +824,7 @@ TEST_F(IODeviceFixture, read_error)
   io_device->screw_fd();                                              // Screw our fd.
   std::this_thread::sleep_for(std::chrono::milliseconds(20));
   EXPECT_EQ(io_device->write_to_fd_count(), 2);                       // Same as above tests.
-  EXPECT_EQ(io_device->read_from_fd_count(), 1);                      // We were woken up because peer closed connection.
+  EXPECT_EQ(io_device->read_from_fd_count(), 1);                      // We were woken up, but trying to read caused a EBADF error.
   EXPECT_EQ(io_device->data_received_count(), 0);                     // No message received.
   EXPECT_EQ(io_device->read_returned_zero_count(), 0);                // No remote close because we get a read error instead of reading EOF.
   EXPECT_EQ(io_device->read_error_count(), 1);                        // We were woken up, but trying to read caused a EBADF error.
@@ -910,8 +960,8 @@ TEST_F(TestIODevice, DeviceStatesAddedClose)
   CALL(test_is_Added(m_input_device));
   CALL(test_is_Added(m_output_device));
 
-  evio::RefCountReleaser input_releaser = m_input_device->close_input_device();
-  evio::RefCountReleaser output_releaser = m_output_device->close_output_device();
+  RefCountReleaser input_releaser = m_input_device->close_input_device();
+  RefCountReleaser output_releaser = m_output_device->close_output_device();
   CALL(test_is_Closed(m_input_device));
   CALL(test_is_Closed(m_output_device));
   EXPECT_TRUE(input_releaser);
@@ -923,8 +973,8 @@ TEST_F(TestIODevice, DeviceStatesActiveClose)
   m_input_device->start_input_device();
   m_output_device->start_output_device();
 
-  evio::RefCountReleaser input_releaser = m_input_device->close_input_device();
-  evio::RefCountReleaser output_releaser = m_output_device->close_output_device();
+  RefCountReleaser input_releaser = m_input_device->close_input_device();
+  RefCountReleaser output_releaser = m_output_device->close_output_device();
   CALL(test_is_Closed(m_input_device));
   CALL(test_is_Closed(m_output_device));
   EXPECT_TRUE(input_releaser);
@@ -940,7 +990,7 @@ TEST_F(TestIODevice, DeviceStatesFlushingClose)
   CALL(test_is_Flushing(m_output_device));
   m_output_device->start_output_device();
   CALL(test_is_Flushing(m_output_device));
-  evio::RefCountReleaser output_releaser = m_output_device->close_output_device();
+  RefCountReleaser output_releaser = m_output_device->close_output_device();
   CALL(test_is_Closed(m_output_device));
   EXPECT_TRUE(output_releaser);
 }
@@ -950,14 +1000,14 @@ TEST_F(TestIODevice, DeviceStatesFlushingStop)
   m_output_device->start_output_device();
   m_output_device->flush_output_device();
   CALL(test_is_Flushing(m_output_device));
-  evio::RefCountReleaser output_releaser = m_output_device->stop_output_device();
+  RefCountReleaser output_releaser = m_output_device->stop_output_device();
   CALL(test_is_Closed(m_output_device));
   EXPECT_TRUE(output_releaser);
 }
 
 TEST_F(TestIODevice, DeviceStatesRemovedFlush)
 {
-  evio::RefCountReleaser output_releaser = m_output_device->flush_output_device();
+  RefCountReleaser output_releaser = m_output_device->flush_output_device();
   CALL(test_is_Closed(m_output_device));
   EXPECT_FALSE(output_releaser);
 }
@@ -967,7 +1017,7 @@ TEST_F(TestIODevice, DeviceStatesAddedFlush)
   m_output_device->start_output_device();
   m_output_device->stop_output_device();
   CALL(test_is_Added(m_output_device));
-  evio::RefCountReleaser output_releaser = m_output_device->flush_output_device();
+  RefCountReleaser output_releaser = m_output_device->flush_output_device();
   CALL(test_is_Closed(m_output_device));
   EXPECT_TRUE(output_releaser);
 }

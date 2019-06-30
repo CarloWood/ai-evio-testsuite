@@ -7,6 +7,9 @@
 #ifdef CWDEBUG
 #include <libcwd/buf2str.h>
 #endif
+#include "NoEpollDevices.h"
+
+using evio::RefCountReleaser;
 
 TEST(StreamBuf, TypeDefs) {
 
@@ -19,7 +22,7 @@ TEST(StreamBuf, TypeDefs) {
   EXPECT_TRUE((std::is_same<StreamBuf::off_type, std::streamoff>::value));
 }
 
-class StreamBuf_OutputDevice : public evio::OutputDevice
+class StreamBuf_OutputDevice : public NoEpollOutputDevice
 {
  private:
   bool m_sync_called;
@@ -27,9 +30,11 @@ class StreamBuf_OutputDevice : public evio::OutputDevice
  public:
   evio::OutputBuffer* get_obuffer() const { return m_obuffer; }
 
-  evio::RefCountReleaser stop_output_device()
+  NAD_DECL_PUBLIC(stop_output_device)
   {
-    return evio::OutputDevice::stop_output_device();
+    NAD_PUBLIC_BEGIN;
+    NAD_CALL_FROM_PUBLIC(evio::OutputDevice::stop_output_device);
+    NAD_PUBLIC_END;
   }
 
   void init(int fd)
@@ -46,7 +51,9 @@ class StreamBuf_OutputDevice : public evio::OutputDevice
   void set_dont_close() { state_t::wat(m_state)->m_flags.set_dont_close(); }
 };
 
-class OutputBufferFixture : public testing::Test
+#include "EventLoopFixture.h"
+
+class OutputBufferFixture : public EventLoopFixture<testing::Test>
 {
  protected:
   boost::intrusive_ptr<StreamBuf_OutputDevice> m_output_device;
@@ -66,12 +73,13 @@ class OutputBufferFixture : public testing::Test
     debug::Mark setup;
 #endif
 
+    EventLoopFixture<testing::Test>::SetUp();
     // Create a test OutputDevice.
     m_output_device = evio::create<StreamBuf_OutputDevice>();
     m_output_device->init(1);           // Otherwise the device is not 'writable', which has influence on certain buffer functions (ie, sync()).
     m_output_device->set_dont_close();
     // Create an OutputBuffer for it.
-    m_output_device->output(m_output, 32);
+    m_output_device->set_source(m_output, 32);
     m_buffer = m_output_device->get_obuffer();
     // Calculate the actual minimum block size, see StreamBuf::StreamBuf.
     m_min_block_size = utils::malloc_size(m_buffer->m_minimum_block_size + sizeof(evio::MemoryBlock)) - sizeof(evio::MemoryBlock);
@@ -84,8 +92,10 @@ class OutputBufferFixture : public testing::Test
     debug::Mark setup;
 #endif
 
+    force_exit();
     m_output_device.reset();
-    // m_output can be reused (the call to output() above will effectively reset it).
+    // m_output can be reused (the call to set_source() above will effectively reset it).
+    EventLoopFixture<testing::Test>::TearDown();
   }
 
   void test_size(size_t actual_size)
@@ -125,8 +135,8 @@ TEST_F(OutputBufferFixture, StreamBuf)
   m_output_device->reset_sync_called();
   // Sanity check.
   EXPECT_FALSE(m_output_device->sync_called());
-  // Trick to see which device this buffer uses: call sync(), this should call sync() on the device.
-  m_buffer->sync();
+  // Trick to see which device this buffer uses: call pubsync(), this should call sync() on the device.
+  m_buffer->pubsync();
   EXPECT_TRUE(m_output_device->sync_called());
 
   // The buffer only has a single allocated block.
@@ -312,7 +322,7 @@ TEST_F(OutputBufferFixture, WriteData)
   EXPECT_EQ(s, "XY\nABCDEF!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 }
 
-class StreamBuf_InputDevice : public evio::InputDevice
+class StreamBuf_InputDevice : public NoEpollInputDevice
 {
  public:
   evio::InputBuffer* get_ibuffer() const { return m_ibuffer; }
@@ -325,10 +335,9 @@ class StreamBuf_InputDecoder : public evio::InputDecoder
  public:
   using evio::InputDecoder::InputDecoder;
 
-  evio::RefCountReleaser decode(evio::MsgBlock&& CWDEBUG_ONLY(msg)) override
+  NAD_DECL_CWDEBUG_ONLY(decode, evio::MsgBlock&& CWDEBUG_ONLY(msg)) override
   {
-    DoutEntering(dc::notice, "StreamBuf_InputDecoder::decode(\"" NAD_DoutEntering_ARG << libcwd::buf2str(msg.get_start(), msg.get_size()) << "\")");
-    return {};
+    DoutEntering(dc::notice, "StreamBuf_InputDecoder::decode(" << NAD_DoutEntering_ARG0 << "\"" << libcwd::buf2str(msg.get_start(), msg.get_size()) << "\")");
   }
 };
 
@@ -361,7 +370,7 @@ class InputBufferFixture : public testing::Test
     m_input_device = evio::create<StreamBuf_InputDevice>();
     m_input_device->init(m_pipefd[1]);           // Otherwise the device is not 'writable', which has influence on certain buffer functions (ie, sync()).
     // Create an InputBuffer for it.
-    m_input_device->input(m_input, 32);
+    m_input_device->set_sink(m_input, 32);
     m_buffer = m_input_device->get_ibuffer();
     // Calculate the actual minimum block size, see StreamBuf::StreamBuf.
     m_min_block_size = utils::malloc_size(m_buffer->m_minimum_block_size + sizeof(evio::MemoryBlock)) - sizeof(evio::MemoryBlock);
@@ -374,7 +383,7 @@ class InputBufferFixture : public testing::Test
     debug::Mark teardown;
 #endif
     m_input_device.reset();
-    // m_input can be reused (the call to input() above will effectively reset it).
+    // m_input can be reused (the call to set_sink() above will effectively reset it).
 
     close(m_pipefd[0]);
   }
@@ -434,7 +443,7 @@ class AOutputStream : public std::ostream
 {
 };
 
-class LinkBufferFixture : public testing::Test
+class LinkBufferFixture : public EventLoopFixture<testing::Test>
 {
  protected:
   boost::intrusive_ptr<StreamBuf_InputDevice> m_input_device;
@@ -457,6 +466,7 @@ class LinkBufferFixture : public testing::Test
     Dout(dc::notice, "v LinkBufferFixture::SetUp()");
     debug::Mark setup;
 #endif
+    EventLoopFixture<testing::Test>::SetUp();
 
     // Get some valid fd.
     if (pipe2(m_pipefd, O_CLOEXEC) == -1)
@@ -471,7 +481,7 @@ class LinkBufferFixture : public testing::Test
     m_output_device->init(m_pipefd[0]); // Otherwise the device is not 'writable', which has influence on certain buffer functions (ie, sync()).
     m_output_device->set_dont_close();
     // Create a LinkBuffer for it.
-    m_output_device->output(m_input_device, minimum_block_size, 8 * minimum_block_size, -1);
+    m_output_device->set_source(m_input_device, minimum_block_size, 8 * minimum_block_size, -1);
     m_buffer = static_cast<evio::LinkBuffer*>(static_cast<evio::Dev2Buf*>(m_input_device->get_ibuffer()));
     // Calculate the actual minimum block size, see StreamBuf::StreamBuf.
     m_min_block_size = utils::malloc_size(m_buffer->m_minimum_block_size + sizeof(evio::MemoryBlock)) - sizeof(evio::MemoryBlock);
@@ -488,9 +498,11 @@ class LinkBufferFixture : public testing::Test
     Dout(dc::notice, "v LinkBufferFixture::TearDown()");
     debug::Mark teardown;
 #endif
+    force_exit();
     m_input_device.reset();
     m_output_device.reset();
-    // m_input can be reused (the call to input() above will effectively reset it).
+    // m_input can be reused (the call to set_sink() above will effectively reset it).
+    EventLoopFixture<testing::Test>::TearDown();
   }
 };
 

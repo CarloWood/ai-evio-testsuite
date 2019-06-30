@@ -1,6 +1,7 @@
 #include "evio/OutputStream.h"
 #include "utils/malloc_size.h"
 #include "utils/is_power_of_two.h"
+#include "NoEpollDevices.h"
 
 TEST(OutputStream, default_output_blocksize_c)
 {
@@ -11,19 +12,23 @@ TEST(OutputStream, default_output_blocksize_c)
   EXPECT_LT(alloc_size, utils::malloc_size(requested_size + 1));
 }
 
-class MyOutputDevice : public evio::OutputDevice
+class MyOutputDevice : public NoEpollOutputDevice
 {
  public:
   evio::OutputBuffer* get_obuffer() const { return m_obuffer; }
 
-  evio::RefCountReleaser stop_output_device()
+  NAD_DECL_PUBLIC(stop_output_device)
   {
-    return evio::OutputDevice::stop_output_device();
+    NAD_PUBLIC_BEGIN;
+    NAD_CALL_FROM_PUBLIC(evio::OutputDevice::stop_output_device);
+    NAD_PUBLIC_END;
   }
 
   void init(int fd)
   {
     evio::OutputDevice::init(fd);
+    state_t::wat state_w(m_state);
+    state_w->m_flags.set_regular_file();
   }
 };
 
@@ -38,7 +43,11 @@ class MyOutputStream : public evio::OutputStream
   }
 };
 
-TEST(OutputStream, create_buffer)
+#include "EventLoopFixture.h"
+
+using OutputStreamFixture = EventLoopFixture<testing::Test>;
+
+TEST_F(OutputStreamFixture, create_buffer)
 {
   // Create a test OutputDevice.
   auto output_device = evio::create<MyOutputDevice>();
@@ -66,16 +75,16 @@ TEST(OutputStream, create_buffer)
     switch (number_of_args)
     {
       case 0:
-        output_device->output(output);
+        output_device->set_source(output);
         break;
       case 1:
-        output_device->output(output, test_args.minimum_blocksize);
+        output_device->set_source(output, test_args.minimum_blocksize);
         break;
       case 2:
-        output_device->output(output, test_args.minimum_blocksize, test_args.buffer_full_watermark);
+        output_device->set_source(output, test_args.minimum_blocksize, test_args.buffer_full_watermark);
         break;
       case 3:
-        output_device->output(output, test_args.minimum_blocksize, test_args.buffer_full_watermark, test_args.max_alloc);
+        output_device->set_source(output, test_args.minimum_blocksize, test_args.buffer_full_watermark, test_args.max_alloc);
         break;
     }
 

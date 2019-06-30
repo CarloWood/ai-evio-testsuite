@@ -4,6 +4,7 @@
 #ifdef CWDEBUG
 #include "libcwd/buf2str.h"
 #endif
+#include "NoEpollDevices.h"
 #include <cstdlib>
 #include <fcntl.h>      // O_CLOEXEC
 
@@ -16,7 +17,7 @@ TEST(InputDecoder, default_input_blocksize_c)
   EXPECT_LT(alloc_size, utils::malloc_size(requested_size + 1));
 }
 
-class MyInputDevice : public evio::InputDevice
+class MyInputDevice : public NoEpollInputDevice
 {
  public:
   evio::InputBuffer* get_ibuffer() const { return m_ibuffer; }
@@ -24,6 +25,8 @@ class MyInputDevice : public evio::InputDevice
   void init(int fd)
   {
     evio::InputDevice::init(fd);
+    state_t::wat state_w(m_state);
+    state_w->m_flags.set_regular_file();
   }
 };
 
@@ -32,7 +35,7 @@ class MyInputDecoder : public evio::InputDecoder
  public:
   using evio::InputDecoder::InputDecoder;
 
-  evio::RefCountReleaser decode(evio::MsgBlock&& CWDEBUG_ONLY(msg)) override
+  NAD_DECL(decode, evio::MsgBlock&& CWDEBUG_ONLY(msg)) override
   {
     DoutEntering(dc::notice, "MyInputDecoder::decode(" NAD_DoutEntering_ARG "\"" << libcwd::buf2str(msg.get_start(), msg.get_size()) << "\")");
   }
@@ -53,7 +56,11 @@ class MyInputDecoder : public evio::InputDecoder
   }
 };
 
-TEST(InputDecoder, create_buffer)
+#include "EventLoopFixture.h"
+
+using InputDecoderFixture = EventLoopFixture<testing::Test>;
+
+TEST_F(InputDecoderFixture, create_buffer)
 {
   // Create a test InputDevice.
   auto input_device = evio::create<MyInputDevice>();
@@ -81,16 +88,16 @@ TEST(InputDecoder, create_buffer)
     switch (number_of_args)
     {
       case 0:
-        input_device->input(decoder);
+        input_device->set_sink(decoder);
         break;
       case 1:
-        input_device->input(decoder, test_args.minimum_blocksize);
+        input_device->set_sink(decoder, test_args.minimum_blocksize);
         break;
       case 2:
-        input_device->input(decoder, test_args.minimum_blocksize, test_args.buffer_full_watermark);
+        input_device->set_sink(decoder, test_args.minimum_blocksize, test_args.buffer_full_watermark);
         break;
       case 3:
-        input_device->input(decoder, test_args.minimum_blocksize, test_args.buffer_full_watermark, test_args.max_alloc);
+        input_device->set_sink(decoder, test_args.minimum_blocksize, test_args.buffer_full_watermark, test_args.max_alloc);
         break;
     }
 
@@ -118,7 +125,7 @@ TEST(InputDecoder, create_buffer)
   input_device->close_input_device();
 }
 
-TEST(InputDecoder, end_of_msg_finder)
+TEST_F(InputDecoderFixture, end_of_msg_finder)
 {
   MyInputDecoder decoder;
 

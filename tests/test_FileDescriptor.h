@@ -7,8 +7,10 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+using evio::RefCountReleaser;
+
 // FileDescriptor *only* has a default constructor, but it is protected,
-// so create a this class in order to be able to instantiate it.
+// so create this class in order to be able to instantiate it.
 class FileDescriptor : public virtual evio::FileDescriptor
 {
  private:
@@ -47,25 +49,31 @@ class FileDescriptor : public virtual evio::FileDescriptor
   void test_close_input_device_does_nothing()
   {
     m_closed_called = false;
-    evio::RefCountReleaser need_allow_deletion = close_input_device();
+    NAD_PUBLIC_BEGIN;
+    NAD_CALL_PUBLIC(close_input_device);
     EXPECT_FALSE(m_closed_called);      // closed() was not called.
-    EXPECT_FALSE(need_allow_deletion);  // This means that going out of scope won't do anything.
+    // No NAD_PUBLIC_END; instead test that nothing will happen when we just leave scope and just leave scope.
+    EXPECT_FALSE(nad_rcr);  // This means that going out of scope won't do anything.
   }
 
   void test_close_output_device_does_nothing()
   {
     m_closed_called = false;
-    evio::RefCountReleaser need_allow_deletion = close_output_device();
+    NAD_PUBLIC_BEGIN;
+    NAD_CALL_PUBLIC(close_output_device);
     EXPECT_FALSE(m_closed_called);      // closed() was not called.
-    EXPECT_FALSE(need_allow_deletion);  // This means that going out of scope won't do anything.
+    // No NAD_PUBLIC_END; instead test that nothing will happen when we just leave scope and just leave scope.
+    EXPECT_FALSE(nad_rcr);  // This means that going out of scope won't do anything.
   }
 
   void test_close_does_nothing()
   {
     m_closed_called = false;
-    evio::RefCountReleaser need_allow_deletion = close();
+    NAD_PUBLIC_BEGIN;
+    NAD_CALL_PUBLIC(close);
     EXPECT_FALSE(m_closed_called);      // closed() was not called.
-    EXPECT_FALSE(need_allow_deletion);  // This means that going out of scope won't do anything.
+    // No NAD_PUBLIC_END; instead test that nothing will happen when we just leave scope and just leave scope.
+    EXPECT_FALSE(nad_rcr);  // This means that going out of scope won't do anything.
   }
 
   static void reset_instance_count()
@@ -82,7 +90,7 @@ class FileDescriptor : public virtual evio::FileDescriptor
   // Event: the filedescriptor(s) of this device were just closed (close_fds() was called).
   // If INTERNAL_FDS_DONT_CLOSE is set then the fd(s) weren't really closed, but this method is still called.
   // When we get here the object is also marked as FDS_DEAD.
-  evio::RefCountReleaser closed() override
+  NAD_DECL_UNUSED_ARG(closed) override
   {
     EXPECT_FALSE(m_closed_called);
     m_closed_called = true;
@@ -90,7 +98,6 @@ class FileDescriptor : public virtual evio::FileDescriptor
     EXPECT_TRUE(state_w->m_flags.is_dead());
     bool dont_close = state_w->m_flags.dont_close();
     EXPECT_TRUE(evio::is_valid(m_fd) == dont_close);
-    return {};
   }
 
  public:
@@ -100,9 +107,20 @@ class FileDescriptor : public virtual evio::FileDescriptor
 //static
 int FileDescriptor::s_instance_count;
 
-class TestInputDevice : public evio::InputDevice, public FileDescriptor
+#include "MyDummyDecoder.h"
+#include "NoEpollDevices.h"
+
+class TestInputDevice : public NoEpollInputDevice, public FileDescriptor
 {
+ private:
+  MyDummyDecoder m_decoder;
+
  public:
+  TestInputDevice()
+  {
+    set_sink(m_decoder);
+  }
+
   void test_close_input_device_closes_fd(bool started);
   void test_close_closes_input_fd(bool started);
   void test_disable_input_device(bool started, bool close);
@@ -122,9 +140,17 @@ class TestInputDevice : public evio::InputDevice, public FileDescriptor
   }
 };
 
-class TestOutputDevice : public evio::OutputDevice, public FileDescriptor
+class TestOutputDevice : public NoEpollOutputDevice, public FileDescriptor
 {
+ private:
+  evio::OutputStream m_output;
+
  public:
+  TestOutputDevice()
+  {
+    set_source(m_output);
+  }
+
   void test_close_output_device_closes_fd(bool started);
   void test_close_closes_output_fd(bool started);
   void test_disable_output_device(bool started, bool close);
@@ -151,17 +177,26 @@ class TestOutputDevice : public evio::OutputDevice, public FileDescriptor
 // Test Fixtures
 //
 
-class TestDestruction : public testing::Test
+#include "EventLoopFixture.h"
+
+class TestDestruction : public EventLoopFixture<testing::Test>
 {
  protected:
   void SetUp() override
   {
+#ifdef CWDEBUG
+    Dout(dc::notice, "v TestDestruction::SetUp()");
+    debug::Mark setup;
+#endif
+    EventLoopFixture<testing::Test>::SetUp();
     CALL(FileDescriptor::reset_instance_count());
   }
 
   void TearDown() override
   {
+    Dout(dc::notice, "v TestDestruction::TearDown()");
     CALL(FileDescriptor::test_all_instances_were_destructed());
+    EventLoopFixture<testing::Test>::TearDown();
   }
 };
 
@@ -501,9 +536,11 @@ void TestInputDevice::test_close_input_device_closes_fd(bool started)
 {
   ASSERT(evio::is_valid(get_fd()) && get_flags().is_readable());        // Preconditions for this test.
   m_closed_called  = false;
-  evio::RefCountReleaser need_allow_deletion = close_input_device();
+  NAD_PUBLIC_BEGIN;
+  NAD_CALL_PUBLIC(close_input_device);
   EXPECT_TRUE(m_closed_called);                 // closed() was called.
-  EXPECT_EQ(need_allow_deletion, started);      // If need_allow_deletion is true then going out of scope will call allow_deletion(),
+  // No NAD_PUBLIC_END; instead test that allow_deletion will be called when going out of scope only when started is true and just go out of scope.
+  EXPECT_EQ(nad_rcr, started);                  // If nad_rcr is true then going out of scope will call allow_deletion(),
                                                 // but that is obviously only needed when the device was inhibited for deletion because it was started.
 }
 
@@ -511,9 +548,11 @@ void TestInputDevice::test_close_closes_input_fd(bool started)
 {
   ASSERT(evio::is_valid(get_fd()) && get_flags().is_readable());        // Preconditions for this test.
   m_closed_called  = false;
-  evio::RefCountReleaser need_allow_deletion = close();
+  NAD_PUBLIC_BEGIN;
+  NAD_CALL_PUBLIC(close);
   EXPECT_TRUE(m_closed_called);       // closed() was called.
-  EXPECT_EQ(need_allow_deletion, started);
+  // No NAD_PUBLIC_END; instead test that allow_deletion will be called when going out of scope only when started is true and just go out of scope.
+  EXPECT_EQ(nad_rcr, started);
 }
 
 //-----------------------------------------------------------------------------
@@ -577,19 +616,21 @@ void TestOutputDevice::test_close_output_device_closes_fd(bool started)
 {
   ASSERT(evio::is_valid(get_fd()) && get_flags().is_writable());       // Preconditions for this test.
   m_closed_called  = false;
-  evio::RefCountReleaser need_allow_deletion = close_output_device();
-  EXPECT_TRUE(m_closed_called);       // closed() was called.
-  EXPECT_EQ(need_allow_deletion, started);  // If need_allow_deletion is true then going out of scope will call allow_deletion(),
-                                            // but that is obviously only needed when the device was inhibited for deletion because it was started.
+  NAD_PUBLIC_BEGIN;
+  NAD_CALL_PUBLIC(close_output_device);
+  EXPECT_TRUE(m_closed_called);         // closed() was called.
+  EXPECT_EQ(nad_rcr, started);          // If nad_rcr is true then going out of scope will call allow_deletion(),
+                                        // but that is obviously only needed when the device was inhibited for deletion because it was started.
 }
 
 void TestOutputDevice::test_close_closes_output_fd(bool started)
 {
   ASSERT(evio::is_valid(get_fd()) && get_flags().is_writable());     // Preconditions for this test.
   m_closed_called  = false;
-  evio::RefCountReleaser need_allow_deletion = close();
+  NAD_PUBLIC_BEGIN;
+  NAD_CALL_PUBLIC(close);
   EXPECT_TRUE(m_closed_called);       // closed() was called.
-  EXPECT_EQ(need_allow_deletion, started);
+  EXPECT_EQ(nad_rcr, started);
 }
 
 //-----------------------------------------------------------------------------
@@ -628,8 +669,9 @@ void TestInputDevice::test_disable_input_device(bool started, bool close)
   // While a device is added it will not be deleted.
   // In order to let TestDestruction::TearDown() not fail, call close_input_device() here.
   // This is also allowed when the device is already closed.
-  evio::RefCountReleaser need_allow_deletion = close_input_device();
-  EXPECT_EQ(need_allow_deletion, !close);
+  NAD_PUBLIC_BEGIN;
+  NAD_CALL_PUBLIC(close_input_device);
+  EXPECT_EQ(nad_rcr, !close);
 }
 
 //-----------------------------------------------------------------------------
@@ -669,8 +711,9 @@ void TestOutputDevice::test_disable_output_device(bool started, bool close)
   // While a device is aded it will not be deleted.
   // In order to let TestDestruction::TearDown() not fail, call close_output_device() here.
   // This is also allowed when the device is already closed.
-  evio::RefCountReleaser need_allow_deletion = close_output_device();
-  EXPECT_EQ(need_allow_deletion, !close);
+  NAD_PUBLIC_BEGIN;
+  NAD_CALL_PUBLIC(close_output_device);
+  EXPECT_EQ(nad_rcr, !close);
 }
 
 //-----------------------------------------------------------------------------

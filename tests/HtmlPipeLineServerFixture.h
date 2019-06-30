@@ -471,7 +471,10 @@ class HtmlPipeLineServerFixture : public testing::Test
 
   void SetUp()
   {
-    DoutEntering(dc::notice, "HtmlPipeLineServerFixture::SetUp()");
+#ifdef CWDEBUG
+    Dout(dc::notice, "v HtmlPipeLineServerFixture::SetUp()");
+    debug::Mark setup;
+#endif
     std::thread thr([this](){
           Debug(debug::init_thread("HtmlServer"));
           Dout(dc::notice, "Thread started.");
@@ -486,7 +489,7 @@ class HtmlPipeLineServerFixture : public testing::Test
 
   void TearDown()
   {
-    DoutEntering(dc::notice, "HtmlPipeLineServerFixture::TearDown()");
+    Dout(dc::notice, "v HtmlPipeLineServerFixture::TearDown()");
     m_io_service.stop();
     m_server.stop();
     Dout(dc::notice, "Calling m_thread.join()");
