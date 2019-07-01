@@ -3,11 +3,13 @@
 #include "debug.h"
 #include <boost/program_options.hpp>
 
-#if 1
-#include "test_set_XXXsockbuf.h"
+#if 0
+//#include "test_set_XXXsockbuf.h"
 #include "test_print_hostent_on.h"
 #include "test_size_of_addr.h"
+#endif
 #include "test_SocketAddress.h"
+#if 0
 #include "test_RefCountReleaser.h"
 #ifdef CWDEBUG  // Only compiles with CWDEBUG defined.
 #include "test_FileDescriptor.h"

@@ -252,7 +252,7 @@ TEST(SocketAddress, StringViewConstructionWithFamily)
 
 std::array<InOut, 2> const faulty_family_sockaddr_data = {{
   { "[::123.234.1.42]:300", "IPv4 can not start with a colon", AF_INET },
-  { "/123.234.1.42:300", "-", AF_INET }
+  { "/123.234.1.42:300", "is a UNIX socket, but IP address expected because", AF_INET }
 }};
 
 TEST(SocketAddressDeathTest, FaultyStringViewConstructionWithFamily)
@@ -265,7 +265,7 @@ TEST(SocketAddressDeathTest, FaultyStringViewConstructionWithFamily)
         {
 #ifdef CWDEBUG
           EXPECT_DEATH({ evio::SocketAddress sa(test_case.family, test_case.input); }, "^COREDUMP *:.*Assertion");
-#else
+#elif CW_DEBUG
           EXPECT_DEATH({ evio::SocketAddress sa(test_case.family, test_case.input); }, "Assertion .*failed");
 #endif
         }

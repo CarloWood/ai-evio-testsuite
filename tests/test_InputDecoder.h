@@ -8,6 +8,8 @@
 #include <cstdlib>
 #include <fcntl.h>      // O_CLOEXEC
 
+using evio::RefCountReleaser;
+
 TEST(InputDecoder, default_input_blocksize_c)
 {
   Dout(dc::notice, "default_input_blocksize_c = " << evio::default_input_blocksize_c);
