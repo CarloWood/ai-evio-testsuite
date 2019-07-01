@@ -60,10 +60,10 @@ class MyListenSocket : public ListenSocket<MyAcceptedSocket>
     // Called when a new connection is accepted.
     static void new_connection(ListenSocket* UNUSED_ARG(_self), accepted_socket_type& accepted_socket)
     {
-      Dout(dc::notice, "New connection to listen socket was accepted. Sending 10 kb of data.");
+      Dout(dc::notice, "New connection to listen socket was accepted. Sending 10000 bytes of data.");
       // Write 10 kbyte of data.
       for (int n = 0; n < 100; ++n)
-        accepted_socket() << "START012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789THEEND" << std::endl;
+        accepted_socket() << "START012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789END." << std::endl;
     }
 
     // Virtual table of ListenSocket.
@@ -182,6 +182,6 @@ NAD_DECL_CWDEBUG_ONLY(MyDecoder::decode, MsgBlock&& msg)
   DoutEntering(dc::notice, "MyDecoder::decode(" NAD_DoutEntering_ARG0 "\"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
   m_received += msg.get_size();
   // Stop when the last message was received.
-  if (m_received == 10200)
+  if (m_received == 10000)
     stop_input_device();
 }

@@ -7,6 +7,8 @@
 #include <libcwd/buf2str.h>
 #endif
 
+int constexpr burst_size = 1000000;     // Write this many times 100 bytes.
+
 using evio::MsgBlock;
 
 class MyDecoder : public evio::InputDecoder
@@ -49,10 +51,10 @@ class MyListenSocket : public evio::ListenSocket<MyAcceptedSocket>
     // Override
     static void new_connection(ListenSocket* self, accepted_socket_type& accepted_socket)
     {
-      Dout(dc::notice, "New connection to listen socket was accepted. Sending 10 kb of data.");
+      Dout(dc::notice, "New connection to listen socket was accepted. Sending " << (100 * burst_size) << " of data.");
       // Write 10 Mbyte of data.
-      for (int n = 0; n < 100000; ++n)
-        accepted_socket() << "START012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789THEEND\n";
+      for (int n = 0; n < burst_size; ++n)
+        accepted_socket() << "START012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789END.\n";
       accepted_socket() << std::flush;
       accepted_socket.flush_output_device();
       self->close();
@@ -203,6 +205,6 @@ NAD_DECL(MyDecoder::decode, MsgBlock&& msg)
   m_received += msg.get_size();
   Dout(dc::notice, "m_received = " << m_received);
   // Stop when the last message was received.
-  if (m_received == 102000)
+  if (m_received == 100 * burst_size)
     NAD_CALL(close_input_device);
 }

@@ -209,7 +209,6 @@ TEST_F(OutputBufferFixture, WriteData)
   // Still 2...
   CALL(test_size(2));
 
-#if defined(CWDEBUG) || defined(DEBUG)
   // After calling update_get_area directly...
   {
     char* cur_gptr;
@@ -218,21 +217,18 @@ TEST_F(OutputBufferFixture, WriteData)
   }
   // The get area is updated.
   EXPECT_EQ(m_buffer->buf2dev_contiguous(), 2UL);
-#endif
 
   // Writing an endl is equivalent, of course.
   m_output << std::endl;
   CALL(test_size(3));
   EXPECT_EQ(link_buffer->dev2buf_contiguous(), m_min_block_size - 3);
   EXPECT_EQ(m_buffer->buf2dev_contiguous(), 2UL);
-#if defined(CWDEBUG) || defined(DEBUG)
   {
     char* cur_gptr;
     std::streamsize available;
     m_buffer->debug_update_get_area(m_buffer->get_get_area_block_node(), cur_gptr, available);
   }
   EXPECT_EQ(m_buffer->buf2dev_contiguous(), 3UL);
-#endif
 
   // Basically the same holds for writing multiple characters (provided it all fits in the put area).
   m_buffer->sputn("ABC", 3);
@@ -248,14 +244,12 @@ TEST_F(OutputBufferFixture, WriteData)
   // get the get area updated (this is omitted from buf2dev_contiguous() for optimization
   // reasons).
   EXPECT_EQ(m_buffer->buf2dev_contiguous(), 3UL);
-#if defined(CWDEBUG) || defined(DEBUG)
   {
     char* cur_gptr;
     std::streamsize available;
     m_buffer->debug_update_get_area(m_buffer->get_get_area_block_node(), cur_gptr, available);
   }
   EXPECT_EQ(m_buffer->buf2dev_contiguous(), 6UL);
-#endif
 
   // And therefore also when writing to an ostream in any way.
   m_output << "DEF";
@@ -265,14 +259,12 @@ TEST_F(OutputBufferFixture, WriteData)
   CALL(test_size(9));
 
   EXPECT_EQ(m_buffer->buf2dev_contiguous(), 6UL);
-#if defined(CWDEBUG) || defined(DEBUG)
   {
     char* cur_gptr;
     std::streamsize available;
     m_buffer->debug_update_get_area(m_buffer->get_get_area_block_node(), cur_gptr, available);
   }
   EXPECT_EQ(m_buffer->buf2dev_contiguous(), 9UL);
-#endif
 
   // Still 9...
   CALL(test_size(9));
@@ -289,7 +281,6 @@ TEST_F(OutputBufferFixture, WriteData)
   EXPECT_EQ(link_buffer->dev2buf_contiguous(), m_min_block_size - 1);
   // And the get area still wasn't updated.
   EXPECT_EQ(m_buffer->buf2dev_contiguous(), 9UL);
-#if defined(CWDEBUG) || defined(DEBUG)
   {
     char* cur_gptr;
     std::streamsize available;
@@ -299,7 +290,6 @@ TEST_F(OutputBufferFixture, WriteData)
   EXPECT_EQ(m_buffer->buf2dev_contiguous(), m_min_block_size);
   // And the room in the put area is one less than that.
   EXPECT_EQ(link_buffer->dev2buf_contiguous(), m_min_block_size - 1);
-#endif
 
   // Fill up the put area precisely.
   m_output.write(&v[0], m_min_block_size - 1);

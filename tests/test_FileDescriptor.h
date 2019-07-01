@@ -118,11 +118,21 @@ class TestInputDevice : public NoEpollInputDevice, public FileDescriptor
 {
  private:
   MyDummyDecoder m_decoder;
+  int m_pipefd[2];
 
  public:
   TestInputDevice()
   {
     set_sink(m_decoder);
+    // Get some valid fd.
+    if (pipe2(m_pipefd, O_CLOEXEC) == -1)
+      DoutFatal(dc::core|error_cf, "pipe2(" << m_pipefd << ", O_CLOEXEC) = -1");
+  }
+  ~TestInputDevice()
+  {
+    Dout(dc::system|continued_cf, "close(" << m_pipefd[1] << ") = ");
+    CWDEBUG_ONLY(int res =) ::close(m_pipefd[1]);
+    Dout(dc::finish|cond_error_cf(res == -1), res);
   }
 
   void test_close_input_device_closes_fd(bool started);
@@ -133,7 +143,7 @@ class TestInputDevice : public NoEpollInputDevice, public FileDescriptor
   {
     DoutEntering(dc::notice, "TestInputDevice::create(" << start_it << ", " << dont_close << ")");
     auto device = evio::create<TestInputDevice>();
-    int fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
+    int fd = device->m_pipefd[0];
     device->init(fd);
     if (dont_close)
       device->set_dont_close();
@@ -148,11 +158,21 @@ class TestOutputDevice : public NoEpollOutputDevice, public FileDescriptor
 {
  private:
   evio::OutputStream m_output;
+  int m_pipefd[2];
 
  public:
   TestOutputDevice()
   {
     set_source(m_output);
+    // Get some valid fd.
+    if (pipe2(m_pipefd, O_CLOEXEC) == -1)
+      DoutFatal(dc::core|error_cf, "pipe2(" << m_pipefd << ", O_CLOEXEC) = -1");
+  }
+  ~TestOutputDevice()
+  {
+    Dout(dc::system|continued_cf, "close(" << m_pipefd[1] << ") = ");
+    CWDEBUG_ONLY(int res =) ::close(m_pipefd[0]);
+    Dout(dc::finish|cond_error_cf(res == -1), res);
   }
 
   void test_close_output_device_closes_fd(bool started);
@@ -163,7 +183,7 @@ class TestOutputDevice : public NoEpollOutputDevice, public FileDescriptor
   {
     DoutEntering(dc::notice, "TestOutputDevice::create(" << start_it << ", " << dont_close << ")");
     auto device = evio::create<TestOutputDevice>();
-    int fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    int fd = device->m_pipefd[1];
     device->init(fd);
     if (dont_close)
       device->set_dont_close();

@@ -1,4 +1,5 @@
 #define GTEST_DONT_DEFINE_TEST 1
+#define DEBUG_GTEST_TESTSUITE 1
 
 #include "gtest/gtest.h"
 

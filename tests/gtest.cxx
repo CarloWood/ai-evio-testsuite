@@ -7,9 +7,7 @@
 //#include "test_set_XXXsockbuf.h"
 #include "test_print_hostent_on.h"
 #include "test_size_of_addr.h"
-#endif
 #include "test_SocketAddress.h"
-#if 0
 #include "test_RefCountReleaser.h"
 #ifdef CWDEBUG  // Only compiles with CWDEBUG defined.
 #include "test_FileDescriptor.h"
@@ -19,7 +17,7 @@
 #include "test_OutputStream.h"
 #include "test_StreamBuf.h"
 #endif
-//#include "test_Socket.h"
+#include "test_Socket.h"
 
 using namespace boost::program_options;
 
