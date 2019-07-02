@@ -33,11 +33,17 @@ int main()
   epoll_ctl(epoll_fd, EPOLL_CTL_ADD, listen_fd, &events[0]);
 
   connect_sock_fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
+
+  // If we connect BEFORE...
   connect(connect_sock_fd, (struct sockaddr*)&address, sizeof(address));
-//  opt = 4096;
-//  setsockopt(connect_sock_fd, SOL_SOCKET, SO_SNDBUF, &opt, sizeof(opt));
+
+  // ...setting the SO_RCVBUF, then things go wrong.
   opt = 4096;
   setsockopt(connect_sock_fd, SOL_SOCKET, SO_RCVBUF, &opt, sizeof(opt));
+
+  // If the connect() is moved to here, then everything works as expected.
+  //connect(connect_sock_fd, (struct sockaddr*)&address, sizeof(address));
+
   events[0].events = EPOLLIN;
   events[0].data.fd = connect_sock_fd;
   epoll_ctl(epoll_fd, EPOLL_CTL_ADD, connect_sock_fd, &events[0]);
