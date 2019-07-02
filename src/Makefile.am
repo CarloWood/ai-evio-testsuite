@@ -1,6 +1,6 @@
 AM_CPPFLAGS = -iquote $(top_srcdir) -iquote $(top_srcdir)/cwds
 
-bin_PROGRAMS = sockaddr_storage arpa socket_address buffer_test filedescriptor socket_fd socket listen_socket ofstream_data_test connect signals_test
+bin_PROGRAMS = sockaddr_storage arpa socket_address buffer_test filedescriptor socket_fd socket listen_socket ofstream_data_test connect signals_test epoll_bug
 
 sockaddr_storage_SOURCES = sockaddr_storage.cxx
 sockaddr_storage_CXXFLAGS = @LIBCWD_R_FLAGS@
@@ -45,6 +45,10 @@ connect_LDADD = ../evio/libevio.la ../threadpool/libthreadpool.la ../threadsafe/
 signals_test_SOURCES = signals_test.cxx
 signals_test_CXXFLAGS = @LIBCWD_R_FLAGS@
 signals_test_LDADD = ../threadpool/libthreadpool.la ../threadsafe/libthreadsafe.la ../utils/libutils_r.la ../cwds/libcwds_r.la
+
+epoll_bug_SOURCES = epoll_bug.c
+epoll_bug_CXXFLAGS =
+epoll_bug_LDADD =
 
 # --------------- Maintainer's Section
 

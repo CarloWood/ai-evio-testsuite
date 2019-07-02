@@ -7,7 +7,7 @@
 #include <libcwd/buf2str.h>
 #endif
 
-int constexpr burst_size = 1000000;     // Write this many times 100 bytes.
+int constexpr burst_size = 1000;     // Write this many times 100 bytes.
 
 using evio::MsgBlock;
 
