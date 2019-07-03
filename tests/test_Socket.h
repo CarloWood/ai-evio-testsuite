@@ -7,7 +7,7 @@
 #include <libcwd/buf2str.h>
 #endif
 
-int constexpr burst_size = 1000;     // Write this many times 100 bytes.
+int constexpr burst_size = 1000000;     // Write this many times 100 bytes.
 
 using evio::MsgBlock;
 
@@ -139,7 +139,7 @@ template<threadpool::Timer::time_point::rep count, typename Unit> using Interval
 
 TEST(Socket, Constructor)
 {
-  // Initialize signals.
+  // Initialize signals. SIGPIPE *must* be ignored or write() won't return EPIPE when peer closed the connection.
   AISignals signals({SIGPIPE});
 
   // Create a thread pool.
@@ -149,10 +149,8 @@ TEST(Socket, Constructor)
 
   try
   {
-    // Construct Timer before EventLoop, so that the EventLoop is destructed first!
-    // Otherwise the timer is destructed and cancelled before we even start to wait for it (in the destructor of event_loop).
-//    threadpool::Timer timer;
-    // Also construct the decoder *before* the EventLoop! Or it will be destructed before it is being used.
+    // Construct MyDecoder before EventLoop, so that the EventLoop is destructed first!
+    // Otherwise the decoder is destructed before we can use it (in the destructor of event_loop).
     MyDecoder decoder;
 
     // Initialize the IO event loop thread.
@@ -163,15 +161,6 @@ TEST(Socket, Constructor)
     {
       auto listen_sock = evio::create<MyListenSocket>();
       listen_sock->listen(listen_address);
-#if 0
-      timer.start(Interval<10, std::chrono::seconds>(),
-          [&timer, listen_sock]()
-          {
-            timer.release_callback();
-            listen_sock->close();
-            evio::EventLoopThread::instance().bump_terminate();
-          });
-#endif
     }
 
     // Dumb way to wait until the listen socket is up.
@@ -180,10 +169,10 @@ TEST(Socket, Constructor)
     {
       // Connect a socket to the listen socket.
       auto socket = evio::create<MyClientSocket>();
-      //socket->set_source(socket, 1024 - 32, 4096, 1000000);
-      socket->set_sink(decoder, 1024 - evio::block_overhead_c, 4096, 100000000);
+      socket->set_source(socket, 1024 - evio::block_overhead_c, 4096, 1000000);
+      //socket->set_sink(decoder, 1024 - evio::block_overhead_c, 4096, 100000000);
       socket->connect(listen_address);
-      socket->flush_output_device();
+      //socket->flush_output_device();
     }
 
     event_loop.join();
