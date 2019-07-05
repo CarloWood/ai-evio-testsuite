@@ -1,3 +1,42 @@
+// Compile as:
+//
+//   gcc -g epoll_bug.c -o epoll_bug
+//
+// Run
+//
+//   ./epoll_bug
+//
+// and observe that epoll_wait() starts stalling.
+// On my box the stalls are between 205 and 208 ms (mostly 207)
+// and appear to be a multiple of 41 ms (I have seen values of 41, 123 and 165 ms too).
+//
+// This test program establishes a AF_INET socket---socket connection and
+// writes data to one socket until 1GB has been written. At the same time
+// data is read on the other end AND written back, and finally read again
+// on the initial socket.
+//
+// All reads and writes are done after epoll_wait() (level triggered) says
+// that it is possible to read / write respectively. Under normal circumstances
+// that is non-stop and calls to epoll_wait only take microseconds.
+//
+// However, after a while the system gets into a state where - although
+// a LOT more was written back than was read on the initial socket yet -
+// epoll_wait() is no longer returning instantly but gets stalled for ~207 ms
+// every call, slowing down the transfer with a factor of 1000 or more.
+//
+// When the sizes of the sndbuf and rcvbuf are changed, the problem can
+// go away; for example set both to 65536 bytes and the program finishes in
+// roughtly 2 seconds.
+//
+//   >time ./epoll_bug
+//   Total written from fd 6 ==> 5: 1000000000; total read: 1000000000; still in the pipe line: 0 bytes.
+//   Total written from fd 5 ==> 6: 1000000000; total read: 1000000000; still in the pipe line: 0 bytes.
+//
+//   real    0m2,052s
+//   user    0m0,156s
+//   sys     0m1,868s
+//
+
 #define _GNU_SOURCE     // For accept4.
 #include <sys/epoll.h>
 #include <sys/socket.h>
@@ -8,6 +47,11 @@
 #include <errno.h>
 #include <stdio.h>
 #include <assert.h>
+
+// The minimum amount of bytes to sent over the TCP/IP connection (in both ways).
+int burst_size = 1000000000;
+int sndbuf_size = 4096;
+int rcvbuf_size = 4096;
 
 struct Epoll;
 struct EventObj;
@@ -25,23 +69,29 @@ typedef int bool;
 bool ListenSocket_read_event(EventObj* self_event, Epoll* epoll_obj);
 bool AcceptSocket_write_event(EventObj* self_event, Epoll* epoll_obj);
 bool ClientSocket_read_event(EventObj* self_event, Epoll* epoll_obj);
+bool ClientSocket_write_event(EventObj* event_obj, Epoll* epoll_obj);
+bool AcceptSocket_read_event(EventObj* self_event, Epoll* epoll_obj);
 
 struct Epoll
 {
   int fd;
   char* buf;
   int watched_count;
-  size_t twlen;
-  size_t trlen;
+  size_t twlen1;
+  size_t twlen2;
+  size_t trlen1;
+  size_t trlen2;
 };
 
 void Epoll_init(Epoll* self)
 {
   self->fd = epoll_create1(EPOLL_CLOEXEC);
-  self->buf = calloc(1, 1000000);
+  self->buf = calloc(1, 10000000);
   self->watched_count = 0;
-  self->twlen = 0;
-  self->trlen = 0;
+  self->twlen1 = 0;
+  self->twlen2 = 0;
+  self->trlen1 = 0;
+  self->trlen2 = 0;
 }
 
 struct EventObj
@@ -52,47 +102,52 @@ struct EventObj
   bool (*write_event)(EventObj*, Epoll*);
 };
 
-void Epoll_add_listen_socket(Epoll* self, EventObj* event_obj)
+void Epoll_add(Epoll* self, EventObj* event_obj, int events)
 {
+  // Don't add events that are already watched.
+  assert(!(event_obj->watched_events & events));
   struct epoll_event event;
   memset(&event, 0, sizeof(event));
-  event.events = EPOLLIN;
+  event.events = event_obj->watched_events | events;
   event.data.ptr = event_obj;
+  epoll_ctl(self->fd, (event.events != events) ? EPOLL_CTL_MOD : EPOLL_CTL_ADD, event_obj->fd, &event);
+  int count = 0;
+  for (int ev = EPOLLIN; ; ev = EPOLLOUT)
+  {
+    if ((events & ev))
+      ++count;
+    if (ev == EPOLLOUT)
+      break;
+  }
   event_obj->watched_events = event.events;
+  self->watched_count += count;
+}
+
+void Epoll_add_listen_socket(Epoll* self, EventObj* event_obj)
+{
   event_obj->read_event = &ListenSocket_read_event;
   event_obj->write_event = NULL;
-  epoll_ctl(self->fd, EPOLL_CTL_ADD, event_obj->fd, &event);
-  self->watched_count++;
+  Epoll_add(self, event_obj, EPOLLIN);
 }
 
 void Epoll_add_client_socket(Epoll* self, EventObj* event_obj)
 {
-  struct epoll_event event;
-  memset(&event, 0, sizeof(event));
-  event.events = EPOLLIN /*|EPOLLOUT*/;
-  event.data.ptr = event_obj;
-  event_obj->watched_events = event.events;
   event_obj->read_event = &ClientSocket_read_event;
-  event_obj->write_event = NULL;
-  epoll_ctl(self->fd, EPOLL_CTL_ADD, event_obj->fd, &event);
-  self->watched_count++;
+  event_obj->write_event = &ClientSocket_write_event;
+  Epoll_add(self, event_obj, EPOLLIN);
 }
 
 void Epoll_add_accept_socket(Epoll* self, EventObj* event_obj)
 {
-  struct epoll_event event;
-  memset(&event, 0, sizeof(event));
-  event.events = /*EPOLLIN|*/EPOLLOUT;
-  event.data.ptr = event_obj;
-  event_obj->watched_events = event.events;
-  event_obj->read_event = NULL;
+  event_obj->read_event = &AcceptSocket_read_event;
   event_obj->write_event = &AcceptSocket_write_event;
-  epoll_ctl(self->fd, EPOLL_CTL_ADD, event_obj->fd, &event);
-  self->watched_count++;
+  Epoll_add(self, event_obj, EPOLLIN|EPOLLOUT);
 }
 
 bool Epoll_remove(Epoll* self, EventObj* event_obj, int events)
 {
+  // Don't remove events that aren't watched.
+  assert((event_obj->watched_events & events) == events);
   struct epoll_event event;
   memset(&event, 0, sizeof(event));
   event.events = event_obj->watched_events & ~events;
@@ -119,7 +174,9 @@ void Epoll_mainloop(Epoll* self)
   memset(events, 0, sizeof(events));
   for (;;)
   {
-    int n = epoll_wait(self->fd, events, 4, -1);
+    int n = epoll_wait(self->fd, events, 4, 10);
+    if (n == 0)
+      printf("epoll_wait() was delayed!\n");
     while (n--)
     {
       if ((events[n].events & EPOLLIN))
@@ -128,7 +185,7 @@ void Epoll_mainloop(Epoll* self)
         if (!event_obj->read_event(event_obj, self))
         {
           if (!Epoll_remove(self, event_obj, EPOLLIN))
-            exit(0);
+            return;
         }
       }
       if ((events[n].events & EPOLLOUT))
@@ -137,7 +194,7 @@ void Epoll_mainloop(Epoll* self)
         if (!event_obj->write_event(event_obj, self))
         {
           if (!Epoll_remove(self, event_obj, EPOLLOUT))
-            exit(0);
+            return;
         }
       }
       assert(!(events[n].events & ~(EPOLLIN|EPOLLOUT)));
@@ -152,40 +209,58 @@ struct AcceptSocket
 
 bool AcceptSocket_write_event(EventObj* self_event, Epoll* epoll_obj)
 {
-  int const as = 5;
-  int alen[5] = { 2016, 2016, 4064, 8160, 16384 };
+  int const as = 11;
+  int alen[11] = { 2016, 2016, 4064, 8160, 16384, 32832, 65728, 131520, 263104, 526272, 1052608 };
   int i = 0;
   int len, wlen;
+  int sum = 0;
+  int max = burst_size - epoll_obj->twlen1;
   do
   {
     len = alen[i++];
+    if (len > max)
+      len = max;
     wlen = write(self_event->fd, epoll_obj->buf, len);
     if (wlen > 0)
-      epoll_obj->twlen += wlen;
+    {
+      epoll_obj->twlen1 += wlen;
+      max -= wlen;
+      sum += wlen;
+    }
   }
-  while (wlen == len && i < as);
+  while (wlen == len && i < as && max > 0);
 
-#if 0
-  // At this point remove the EPOLLOUT event request again from connect_sock_fd.
-  struct epoll_event event;
-  memset(&event, 0, sizeof(event));
-  event.events = EPOLLIN;
-  event.data.ptr = self_event;
-  epoll_ctl(epoll_obj->fd, EPOLL_CTL_MOD, self_event->fd, &event);
-#endif
+//  printf("wrote %d bytes to %d (total written now %lu), now in pipe line: %ld\n", sum, self_event->fd, epoll_obj->twlen1, epoll_obj->twlen1 - epoll_obj->trlen1);
 
-  return  epoll_obj->twlen < 100000000;
-//    epoll_ctl(epoll_obj->fd, EPOLL_CTL_DEL, self_event->fd, NULL);
-//    close(self_event->fd);
+  return  epoll_obj->twlen1 < burst_size;
+}
+
+bool AcceptSocket_read_event(EventObj* self_event, Epoll* epoll_obj)
+{
+  int len = 992;
+  int rlen;
+  int sum = 0;
+  do
+  {
+    rlen = read(self_event->fd, epoll_obj->buf, len);
+    if (rlen > 0)
+    {
+      epoll_obj->trlen2 += rlen;
+      sum += rlen;
+    }
+  }
+  while (rlen > 0);
+//  printf("Read %d bytes from fd %d (total read now %lu), left in pipe line: %ld\n", sum, self_event->fd, epoll_obj->trlen2, epoll_obj->twlen2 - epoll_obj->trlen2);
+  return rlen != 0;
 }
 
 void AcceptSocket_init(AcceptSocket* self, int listen_fd, Epoll* epoll_obj)
 {
   memset(&self->event, 0, sizeof(EventObj));
   self->event.fd = accept4(listen_fd, NULL, NULL, SOCK_NONBLOCK | SOCK_CLOEXEC);
-  int opt = 4096;
+  int opt = rcvbuf_size;
   setsockopt(self->event.fd, SOL_SOCKET, SO_RCVBUF, &opt, sizeof(opt));
-  opt = 4096;
+  opt = sndbuf_size;
   setsockopt(self->event.fd, SOL_SOCKET, SO_SNDBUF, &opt, sizeof(opt));
 
   Epoll_add_accept_socket(epoll_obj, &self->event);
@@ -195,12 +270,14 @@ struct ListenSocket
 {
   EventObj event;
   struct sockaddr_in address;
+  AcceptSocket* accept_socket;
 };
 
 bool ListenSocket_read_event(EventObj* self_event, Epoll* epoll_obj)
 {
-  AcceptSocket* accept_socket = (AcceptSocket*)calloc(sizeof(AcceptSocket), 1);
-  AcceptSocket_init(accept_socket, self_event->fd, epoll_obj);
+  ListenSocket* self = (ListenSocket*)self_event;
+  self->accept_socket = (AcceptSocket*)calloc(sizeof(AcceptSocket), 1);
+  AcceptSocket_init(self->accept_socket, self_event->fd, epoll_obj);
   return 0;
 }
 
@@ -226,29 +303,49 @@ struct ClientSocket
 
 bool ClientSocket_read_event(EventObj* self_event, Epoll* epoll_obj)
 {
+  bool buffer_empty = epoll_obj->trlen1 - epoll_obj->twlen2 == 0;
   int len = 992;
   int rlen;
+  int sum = 0;
   do
   {
     rlen = read(self_event->fd, epoll_obj->buf, len);
     if (rlen > 0)
-      epoll_obj->trlen += rlen;
+    {
+      epoll_obj->trlen1 += rlen;
+      sum += rlen;
+    }
   }
   while (rlen > 0);
-  if (rlen == 0)
-  {
-    printf("Total written: %lu; total read: %lu\n", epoll_obj->twlen, epoll_obj->trlen);
-    return 0;
-  }
+//  printf("Read %d bytes from fd %d (total read now %lu), left in pipe line: %ld\n", sum, self_event->fd, epoll_obj->trlen1, epoll_obj->twlen1 - epoll_obj->trlen1);
+  if (buffer_empty && epoll_obj->trlen1 > epoll_obj->twlen2)
+    Epoll_add(epoll_obj, self_event, EPOLLOUT);
   return 1;
+}
+
+bool ClientSocket_write_event(EventObj* event_obj, Epoll* epoll_obj)
+{
+  // We should only get here when there is something to write.
+  assert(epoll_obj->trlen1 - epoll_obj->twlen2 > 0);
+  int wlen = write(event_obj->fd, epoll_obj->buf, epoll_obj->trlen1 - epoll_obj->twlen2);
+//  printf("write(%d, buf, %ld) = %d (total written now %lu), now in pipe line: %ld\n",
+//      event_obj->fd, epoll_obj->trlen1 - epoll_obj->twlen2, wlen, wlen + epoll_obj->twlen2, wlen + epoll_obj->twlen2 - epoll_obj->trlen2);
+  if (wlen <= 0)
+    return 0;
+  epoll_obj->twlen2 += wlen;
+  if (epoll_obj->twlen2 >= burst_size && epoll_obj->twlen2 == epoll_obj->twlen1)
+    Epoll_remove(epoll_obj, event_obj, EPOLLIN);
+  return (epoll_obj->trlen1 - epoll_obj->twlen2) > 0 ? 1 : 0;
 }
 
 void ClientSocket_init(ClientSocket* self, struct sockaddr_in* address, Epoll* epoll_obj)
 {
   memset(&self->event, 0, sizeof(EventObj));
   self->event.fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
-  int opt = 4096;
+  int opt = rcvbuf_size;
   setsockopt(self->event.fd, SOL_SOCKET, SO_RCVBUF, &opt, sizeof(opt));
+  opt = sndbuf_size;
+  setsockopt(self->event.fd, SOL_SOCKET, SO_SNDBUF, &opt, sizeof(opt));
   connect(self->event.fd, (struct sockaddr*)address, sizeof(struct sockaddr_in));
 
   Epoll_add_client_socket(epoll_obj, &self->event);
@@ -266,4 +363,11 @@ int main()
   ClientSocket_init(&client_obj, &listen_obj.address, &epoll_obj);
 
   Epoll_mainloop(&epoll_obj);
+
+  AcceptSocket* accept_ptr = listen_obj.accept_socket;
+
+  printf("Total written from fd %d ==> %d: %lu; total read: %lu; still in the pipe line: %ld bytes.\n",
+      accept_ptr->event.fd, client_obj.event.fd, epoll_obj.twlen1, epoll_obj.trlen1, epoll_obj.twlen1 - epoll_obj.trlen1);
+  printf("Total written from fd %d ==> %d: %lu; total read: %lu; still in the pipe line: %ld bytes.\n",
+      client_obj.event.fd, accept_ptr->event.fd, epoll_obj.twlen2, epoll_obj.trlen2, epoll_obj.twlen2 - epoll_obj.trlen2);
 }
