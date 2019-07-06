@@ -26,7 +26,7 @@
 //
 // When the sizes of the sndbuf and rcvbuf are changed, the problem can
 // go away; for example set both to 65536 bytes and the program finishes in
-// roughtly 2 seconds.
+// roughtly 2 seconds when using a burst_size of 1000000000.
 //
 //   >time ./epoll_bug
 //   Total written from fd 6 ==> 5: 1000000000; total read: 1000000000; still in the pipe line: 0 bytes.
@@ -36,6 +36,17 @@
 //   user    0m0,156s
 //   sys     0m1,868s
 //
+
+// Define this to 1 to print something at every read or write event.
+#define VERBOSE 1
+
+// The amount of bytes to sent over the TCP/IP connection (in both ways).
+int burst_size = 10000000;
+// The socket send and receive buffer sizes of both sockets.
+int sndbuf_size = 1 << 14;
+int rcvbuf_size = 1 << 14;
+
+
 
 #define _GNU_SOURCE     // For accept4.
 #include <sys/epoll.h>
@@ -47,11 +58,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <assert.h>
-
-// The minimum amount of bytes to sent over the TCP/IP connection (in both ways).
-int burst_size = 1000000000;
-int sndbuf_size = 4096;
-int rcvbuf_size = 4096;
+#include <sys/time.h>
 
 struct Epoll;
 struct EventObj;
@@ -174,9 +181,27 @@ void Epoll_mainloop(Epoll* self)
   memset(events, 0, sizeof(events));
   for (;;)
   {
-    int n = epoll_wait(self->fd, events, 4, 10);
-    if (n == 0)
-      printf("epoll_wait() was delayed!\n");
+    struct timeval tv1;
+    gettimeofday(&tv1, NULL);
+    int n = epoll_wait(self->fd, events, 4, 1100);
+    struct timeval tv2;
+    gettimeofday(&tv2, NULL);
+    tv2.tv_sec -= tv1.tv_sec;
+    if ((tv2.tv_usec -= tv1.tv_usec) < 0)
+    {
+      tv2.tv_usec += 1000000;
+      --tv2.tv_sec;
+    }
+    if (tv2.tv_usec > 10000)
+    {
+      if (tv2.tv_sec == 0)
+        printf("epoll_wait() stalled %ld milliseconds!\n", tv2.tv_usec / 1000);
+      else
+      {
+        printf("epoll_wait() blocked permanently!\n");
+        return;
+      }
+    }
     while (n--)
     {
       if ((events[n].events & EPOLLIN))
@@ -230,14 +255,16 @@ bool AcceptSocket_write_event(EventObj* self_event, Epoll* epoll_obj)
   }
   while (wlen == len && i < as && max > 0);
 
-//  printf("wrote %d bytes to %d (total written now %lu), now in pipe line: %ld\n", sum, self_event->fd, epoll_obj->twlen1, epoll_obj->twlen1 - epoll_obj->trlen1);
+#if VERBOSE
+  printf("wrote %d bytes to %d (total written now %lu), now in pipe line: %ld\n", sum, self_event->fd, epoll_obj->twlen1, epoll_obj->twlen1 - epoll_obj->trlen1);
+#endif
 
   return  epoll_obj->twlen1 < burst_size;
 }
 
 bool AcceptSocket_read_event(EventObj* self_event, Epoll* epoll_obj)
 {
-  int len = 992;
+  int len = 100000;
   int rlen;
   int sum = 0;
   do
@@ -250,7 +277,9 @@ bool AcceptSocket_read_event(EventObj* self_event, Epoll* epoll_obj)
     }
   }
   while (rlen > 0);
-//  printf("Read %d bytes from fd %d (total read now %lu), left in pipe line: %ld\n", sum, self_event->fd, epoll_obj->trlen2, epoll_obj->twlen2 - epoll_obj->trlen2);
+#if VERBOSE
+  printf("Read %d bytes from fd %d (total read now %lu), left in pipe line: %ld\n", sum, self_event->fd, epoll_obj->trlen2, epoll_obj->twlen2 - epoll_obj->trlen2);
+#endif
   return rlen != 0;
 }
 
@@ -304,7 +333,7 @@ struct ClientSocket
 bool ClientSocket_read_event(EventObj* self_event, Epoll* epoll_obj)
 {
   bool buffer_empty = epoll_obj->trlen1 - epoll_obj->twlen2 == 0;
-  int len = 992;
+  int len = 100000;
   int rlen;
   int sum = 0;
   do
@@ -317,7 +346,9 @@ bool ClientSocket_read_event(EventObj* self_event, Epoll* epoll_obj)
     }
   }
   while (rlen > 0);
-//  printf("Read %d bytes from fd %d (total read now %lu), left in pipe line: %ld\n", sum, self_event->fd, epoll_obj->trlen1, epoll_obj->twlen1 - epoll_obj->trlen1);
+#if VERBOSE
+  printf("Read %d bytes from fd %d (total read now %lu), left in pipe line: %ld\n", sum, self_event->fd, epoll_obj->trlen1, epoll_obj->twlen1 - epoll_obj->trlen1);
+#endif
   if (buffer_empty && epoll_obj->trlen1 > epoll_obj->twlen2)
     Epoll_add(epoll_obj, self_event, EPOLLOUT);
   return 1;
@@ -328,8 +359,10 @@ bool ClientSocket_write_event(EventObj* event_obj, Epoll* epoll_obj)
   // We should only get here when there is something to write.
   assert(epoll_obj->trlen1 - epoll_obj->twlen2 > 0);
   int wlen = write(event_obj->fd, epoll_obj->buf, epoll_obj->trlen1 - epoll_obj->twlen2);
-//  printf("write(%d, buf, %ld) = %d (total written now %lu), now in pipe line: %ld\n",
-//      event_obj->fd, epoll_obj->trlen1 - epoll_obj->twlen2, wlen, wlen + epoll_obj->twlen2, wlen + epoll_obj->twlen2 - epoll_obj->trlen2);
+#if VERBOSE
+  printf("write(%d, buf, %ld) = %d (total written now %lu), now in pipe line: %ld\n",
+      event_obj->fd, epoll_obj->trlen1 - epoll_obj->twlen2, wlen, wlen + epoll_obj->twlen2, wlen + epoll_obj->twlen2 - epoll_obj->trlen2);
+#endif
   if (wlen <= 0)
     return 0;
   epoll_obj->twlen2 += wlen;
