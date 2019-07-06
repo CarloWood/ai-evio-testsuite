@@ -38,13 +38,16 @@
 //
 
 // Define this to 1 to print something at every read or write event.
-#define VERBOSE 1
+#define VERBOSE 0
 
 // The amount of bytes to sent over the TCP/IP connection (in both ways).
 int burst_size = 10000000;
+int read_length = 100000;
+
 // The socket send and receive buffer sizes of both sockets.
-int sndbuf_size = 1 << 14;
-int rcvbuf_size = 1 << 14;
+#define SIZE 4096
+int const sndbuf_size = 33181;
+int const rcvbuf_size = SIZE;
 
 
 
@@ -264,7 +267,7 @@ bool AcceptSocket_write_event(EventObj* self_event, Epoll* epoll_obj)
 
 bool AcceptSocket_read_event(EventObj* self_event, Epoll* epoll_obj)
 {
-  int len = 100000;
+  int len = read_length;
   int rlen;
   int sum = 0;
   do
@@ -287,10 +290,6 @@ void AcceptSocket_init(AcceptSocket* self, int listen_fd, Epoll* epoll_obj)
 {
   memset(&self->event, 0, sizeof(EventObj));
   self->event.fd = accept4(listen_fd, NULL, NULL, SOCK_NONBLOCK | SOCK_CLOEXEC);
-  int opt = rcvbuf_size;
-  setsockopt(self->event.fd, SOL_SOCKET, SO_RCVBUF, &opt, sizeof(opt));
-  opt = sndbuf_size;
-  setsockopt(self->event.fd, SOL_SOCKET, SO_SNDBUF, &opt, sizeof(opt));
 
   Epoll_add_accept_socket(epoll_obj, &self->event);
 }
@@ -316,6 +315,13 @@ void ListenSocket_init(ListenSocket* self, Epoll* epoll_obj)
   self->event.fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
   int opt = 1;
   setsockopt(self->event.fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+#if 0
+  // These socket buffer sizes are inherited by the accepted sockets!
+  opt = rcvbuf_size;
+  setsockopt(self->event.fd, SOL_SOCKET, SO_RCVBUF, &opt, sizeof(opt));
+  opt = sndbuf_size;
+  setsockopt(self->event.fd, SOL_SOCKET, SO_SNDBUF, &opt, sizeof(opt));
+#endif
   memset(&self->address, 0, sizeof(struct sockaddr_in));
   self->address.sin_family = AF_INET;
   self->address.sin_port = htons(9001);
@@ -333,7 +339,7 @@ struct ClientSocket
 bool ClientSocket_read_event(EventObj* self_event, Epoll* epoll_obj)
 {
   bool buffer_empty = epoll_obj->trlen1 - epoll_obj->twlen2 == 0;
-  int len = 100000;
+  int len = read_length;
   int rlen;
   int sum = 0;
   do
