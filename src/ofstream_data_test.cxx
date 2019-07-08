@@ -18,6 +18,14 @@
 
 using namespace evio;
 
+class OutputStream128 : public OutputStream
+{
+ public:
+  using OutputStream::OutputStream;
+
+  size_t minimum_block_size_estimate() const override { return 128; }
+};
+
 int main()
 {
   Debug(NAMESPACE_DEBUG::init());
@@ -53,15 +61,15 @@ int main()
       // and observe that "data" ends up in both files.
 
       // Open a buffered output file that uses a buffer with a minimum block size of 96 bytes and that we can write to using an ostream.
-      OutputStream output1;                                             // The std::ostream sink.
+      OutputStream128 output1;                                          // The std::ostream sink.
       auto device1 = create<File>();                                    // A File device.
-      device1->set_source(output1, 128 - evio::block_overhead_c);       // Create a buffer that device1 will read from and output1 will write to.
+      device1->set_source(output1);                                     // Create a buffer that device1 will read from and output1 will write to.
       device1->open("blah.txt", std::ios_base::trunc);                  // Open and truncate the file "blah.txt".
 
       // Open an input file that reads 'persistent' from "blah.txt" and link it with an output file that writes to "blah2.txt".
       device2 = create<PersistentInputFile>();
       auto device3 = create<File>();
-      device3->set_source(device2, 1024 - evio::block_overhead_c, 4096, 1000000);       // Create a buffer that device3 will read from and device2 will write to.
+      device3->set_source(device2, 1024 - evio::block_overhead_c, 4096, 1000000);                // Create a buffer that device3 will read from and device2 will write to.
       device2->open("blah.txt", std::ios_base::in);                     // device2 reads from "blah.txt" (when new data is appended to it).
       device3->open("blah2.txt", std::ios_base::trunc);                 // device3 creates a new file "blah2.txt" and writes to that.
 

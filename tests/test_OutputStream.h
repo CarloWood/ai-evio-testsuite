@@ -1,12 +1,18 @@
 #include "evio/OutputStream.h"
+#include "evio/Protocol.h"
 #include "utils/malloc_size.h"
 #include "utils/is_power_of_two.h"
 #include "NoEpollDevices.h"
+#include <cstdlib>
+#include <fcntl.h>
 
-TEST(OutputStream, default_output_blocksize_c)
+using evio::RefCountReleaser;
+
+TEST(OutputStream, default_output_block_size_c)
 {
-  Dout(dc::notice, "default_output_blocksize_c = " << evio::default_output_blocksize_c);
-  size_t const requested_size = sizeof(evio::MemoryBlock) + evio::default_output_blocksize_c;
+  evio::Protocol const protocol;
+  Dout(dc::notice, "Protocol::minimum_block_size() = " << protocol.minimum_block_size());
+  size_t const requested_size = sizeof(evio::MemoryBlock) + protocol.minimum_block_size();
   size_t const alloc_size = utils::malloc_size(requested_size);
   EXPECT_TRUE(utils::is_power_of_two(alloc_size + CW_MALLOC_OVERHEAD));
   EXPECT_LT(alloc_size, utils::malloc_size(requested_size + 1));
@@ -34,8 +40,13 @@ class MyOutputDevice : public NoEpollOutputDevice
 
 class MyOutputStream : public evio::OutputStream
 {
+ private:
+  size_t m_mbs;
+
+  size_t minimum_block_size() const override { return m_mbs ? m_mbs : evio::OutputStream::minimum_block_size(); }
+
  public:
-  using evio::OutputStream::OutputStream;
+  MyOutputStream(size_t requested_minimum_block_size = 0) : m_mbs(requested_minimum_block_size) { }
 
   void start_output_device()
   {
@@ -59,32 +70,37 @@ TEST_F(OutputStreamFixture, create_buffer)
   output_device->init(fd);
   evio::SingleThread type;
 
-  MyOutputStream output;
-
   struct args_t
   {
-    size_t minimum_blocksize;
+    size_t requested_minimum_block_size;
     size_t buffer_full_watermark;
     size_t max_alloc;
   };
   args_t const test_args = { 64, 256, 1000000 };
 
+  MyOutputStream* output;
+
   for (int number_of_args = 0; number_of_args < 4; ++number_of_args)
   {
+    if (number_of_args == 0)
+      output = new MyOutputStream;
+    else
+      output = new MyOutputStream(test_args.requested_minimum_block_size);
+
     // Call function under test.
     switch (number_of_args)
     {
       case 0:
-        output_device->set_source(output);
+        output_device->set_source(*output);
         break;
       case 1:
-        output_device->set_source(output, test_args.minimum_blocksize);
+        output_device->set_source(*output);
         break;
       case 2:
-        output_device->set_source(output, test_args.minimum_blocksize, test_args.buffer_full_watermark);
+        output_device->set_source(*output, test_args.buffer_full_watermark);
         break;
       case 3:
-        output_device->set_source(output, test_args.minimum_blocksize, test_args.buffer_full_watermark, test_args.max_alloc);
+        output_device->set_source(*output, test_args.buffer_full_watermark, test_args.max_alloc);
         break;
     }
 
@@ -92,7 +108,7 @@ TEST_F(OutputStreamFixture, create_buffer)
     EXPECT_TRUE(output_device->is_active(type).is_false());
 
     // Verify that a call to start_output_device now calls m_output_device->start_output_device().
-    output.start_output_device();
+    output->start_output_device();
     EXPECT_TRUE(output_device->is_active(type).is_transitory_true());
 
 #if 0
@@ -104,7 +120,8 @@ TEST_F(OutputStreamFixture, create_buffer)
 #endif
 
     // Check if the expected arguments were passed.
-    size_t const expected_minimum_block_size = number_of_args > 0 ? test_args.minimum_blocksize : evio::default_output_blocksize_c;
+    evio::Protocol const protocol;
+    size_t const expected_minimum_block_size = evio::StreamBuf::round_up_minimum_block_size(number_of_args > 0 ? test_args.requested_minimum_block_size : protocol.minimum_block_size());
     ASSERT_EQ(output_device->get_obuffer()->m_minimum_block_size, expected_minimum_block_size);
     size_t const expected_buffer_full_watermark = number_of_args > 1 ? test_args.buffer_full_watermark : 8 * expected_minimum_block_size;
     ASSERT_EQ(output_device->get_obuffer()->m_buffer_full_watermark, expected_buffer_full_watermark);

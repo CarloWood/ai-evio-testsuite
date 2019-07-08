@@ -18,16 +18,16 @@ enum snd_or_rcv {
 static void set_sockbuf(snd_or_rcv what, int sock_fd, size_t buf_size, size_t minimum_block_size)
 {
   // A warning is expected when requested_buf_size is not a power of two, but it should still work (as long as requested_buf_size is even).
-  if (!utils::is_power_of_two(buf_size))
-    Debug(dc::warning.off());
+//  if (!utils::is_power_of_two(buf_size))
+//    Debug(dc::warning.off());
   Debug(dc::notice.off());
   if (what == sndbuf)
     evio::set_sndsockbuf(sock_fd, buf_size, minimum_block_size);
   else
     evio::set_rcvsockbuf(sock_fd, buf_size, minimum_block_size);
   Debug(dc::notice.on());
-  if (!utils::is_power_of_two(buf_size))
-    Debug(dc::warning.on());
+//  if (!utils::is_power_of_two(buf_size))
+//    Debug(dc::warning.on());
 }
 
 static opt_buf_size_t get_buf_size_len(snd_or_rcv what, int fd)
@@ -53,7 +53,7 @@ static void run_test(snd_or_rcv what)
   opt_buf_size_t const max_buf_size = mem_max * 2;
 
   // Test: use a very small SO_SNDBUF.
-  set_sockbuf(what, fd, 16, 0);
+  set_sockbuf(what, fd, 8, 0);
 
   // Read back the actual SO_SNDBUF size.
   opt_buf_size_t const min_buf_size = get_buf_size_len(what, fd);
@@ -87,22 +87,22 @@ static void run_test(snd_or_rcv what)
       // It would be very strange if suddenly the actual buf_size size would be less than what we just assumed to a minimum.
       EXPECT_GE(actual_buf_size, min_buf_size);
 
-      // The resulting SO_SNDBUF should always be larger or equal the requested size,
+      // The resulting SO_SNDBUF should always be larger or equal two times the requested size,
       // unless it was larger than twice the maximum size.
-      ASSERT_GE(actual_buf_size, std::min(requested_buf_size, max_buf_size));
+      ASSERT_GE(actual_buf_size, std::min(2 * requested_buf_size, max_buf_size));
 
-      // If the returned size is less than what we asked for than it should be equal to the maximum value.
-      if (actual_buf_size < requested_buf_size)
+      // If the returned size is less than twice what we asked for than it should be equal to the maximum value.
+      if (actual_buf_size < 2 * requested_buf_size)
       {
         ASSERT_EQ(actual_buf_size, max_buf_size);
         done = true;
         break;
       }
 
-      // If the actual size isn't the minimum value than we expect it to be equal to what we requested (this is not necessary, but currently the case).
+      // If the actual size isn't the minimum value then we expect it to be equal to what we requested (this is not necessary, but currently the case).
       if (min_buf_size < actual_buf_size && actual_buf_size < max_buf_size)
       {
-        EXPECT_EQ(requested_buf_size, actual_buf_size);
+        EXPECT_EQ(2 * requested_buf_size, actual_buf_size);
       }
     }
 

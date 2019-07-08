@@ -1,3 +1,4 @@
+#include "evio/Protocol.h"
 #include "evio/InputDecoder.h"
 #include "utils/malloc_size.h"
 #include "utils/is_power_of_two.h"
@@ -10,10 +11,11 @@
 
 using evio::RefCountReleaser;
 
-TEST(InputDecoder, default_input_blocksize_c)
+TEST(InputDecoder, default_minimum_block_size)
 {
-  Dout(dc::notice, "default_input_blocksize_c = " << evio::default_input_blocksize_c);
-  size_t const requested_size = sizeof(evio::MemoryBlock) + evio::default_input_blocksize_c;
+  evio::Protocol const protocol;
+  Dout(dc::notice, "Protocol::minimum_block_size() = " << protocol.minimum_block_size());
+  size_t const requested_size = sizeof(evio::MemoryBlock) + protocol.minimum_block_size();
   size_t const alloc_size = utils::malloc_size(requested_size);
   EXPECT_TRUE(utils::is_power_of_two(alloc_size + CW_MALLOC_OVERHEAD));
   EXPECT_LT(alloc_size, utils::malloc_size(requested_size + 1));
@@ -34,8 +36,13 @@ class MyInputDevice : public NoEpollInputDevice
 
 class MyInputDecoder : public evio::InputDecoder
 {
+ private:
+  size_t m_mbs;
+
+  size_t minimum_block_size() const override { return m_mbs ? m_mbs : evio::InputDecoder::minimum_block_size(); }
+
  public:
-  using evio::InputDecoder::InputDecoder;
+  MyInputDecoder(size_t minimum_block_size = 0) : m_mbs(minimum_block_size) { }
 
   NAD_DECL_CWDEBUG_ONLY(decode, evio::MsgBlock&& CWDEBUG_ONLY(msg)) override
   {
@@ -74,11 +81,9 @@ TEST_F(InputDecoderFixture, create_buffer)
   input_device->init(fd);
   evio::SingleThread type;
 
-  MyInputDecoder decoder;
-
   struct args_t
   {
-    size_t minimum_blocksize;
+    size_t requested_minimum_block_size;
     size_t buffer_full_watermark;
     size_t max_alloc;
   };
@@ -87,19 +92,24 @@ TEST_F(InputDecoderFixture, create_buffer)
   for (int number_of_args = 0; number_of_args < 4; ++number_of_args)
   {
     // Call function under test.
+    MyInputDecoder* decoder;
+    if (number_of_args == 0)
+      decoder = new MyInputDecoder;
+    else
+      decoder = new MyInputDecoder(test_args.requested_minimum_block_size);
     switch (number_of_args)
     {
       case 0:
-        input_device->set_sink(decoder);
+        input_device->set_sink(*decoder);
         break;
       case 1:
-        input_device->set_sink(decoder, test_args.minimum_blocksize);
+        input_device->set_sink(*decoder);
         break;
       case 2:
-        input_device->set_sink(decoder, test_args.minimum_blocksize, test_args.buffer_full_watermark);
+        input_device->set_sink(*decoder, test_args.buffer_full_watermark);
         break;
       case 3:
-        input_device->set_sink(decoder, test_args.minimum_blocksize, test_args.buffer_full_watermark, test_args.max_alloc);
+        input_device->set_sink(*decoder, test_args.buffer_full_watermark, test_args.max_alloc);
         break;
     }
 
@@ -107,20 +117,26 @@ TEST_F(InputDecoderFixture, create_buffer)
     EXPECT_TRUE(input_device->is_active(type).is_false());
 
     // Verify that a call to start_input_device now calls m_input_device->start_input_device().
-    decoder.start_input_device();
+    decoder->start_input_device();
     EXPECT_TRUE(input_device->is_active(type).is_transitory_true());
 
     // Likewise when calling stop_input_device().
-    decoder.stop_input_device();
+    decoder->stop_input_device();
     EXPECT_TRUE(input_device->is_active(type).is_false());
 
     // Check if the expected arguments were passed.
-    size_t const expected_minimum_block_size = number_of_args > 0 ? test_args.minimum_blocksize : evio::default_input_blocksize_c;
+    evio::Protocol const protocol;
+    size_t const expected_minimum_block_size =
+      number_of_args > 0 ?
+        evio::StreamBuf::round_up_minimum_block_size(test_args.requested_minimum_block_size) :       // See what the StreamBuf constructor passes to StreamBufProducer.
+        evio::StreamBuf::round_up_minimum_block_size(protocol.minimum_block_size());
     ASSERT_EQ(input_device->get_ibuffer()->m_minimum_block_size, expected_minimum_block_size);
     size_t const expected_buffer_full_watermark = number_of_args > 1 ? test_args.buffer_full_watermark : 8 * expected_minimum_block_size;
     ASSERT_EQ(input_device->get_ibuffer()->m_buffer_full_watermark, expected_buffer_full_watermark);
     size_t const expected_max_allocated_block_size = number_of_args > 2 ? test_args.max_alloc : std::numeric_limits<size_t>::max();
     ASSERT_EQ(input_device->get_ibuffer()->m_max_allocated_block_size, expected_max_allocated_block_size);
+
+    delete decoder;
   }
 
   // Clean up.

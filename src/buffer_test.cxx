@@ -6,8 +6,8 @@
 #include <libcwd/buf2str.h>
 #endif
 
-size_t constexpr minimum_blocksize = 64;
-size_t constexpr max_alloc = 1024 * minimum_blocksize;
+size_t constexpr minimum_block_size = 64;
+size_t constexpr max_alloc = 1024 * minimum_block_size;
 size_t constexpr buffer_full_watermark = max_alloc * 0.8;
 
 // Buffer used when reading input from a device (fd).
@@ -116,7 +116,7 @@ int main()
 
   if (1)
   {
-    MyInputBuffer* sb = new MyInputBuffer(nullptr, minimum_blocksize, max_alloc, buffer_full_watermark);
+    MyInputBuffer* sb = new MyInputBuffer(nullptr, minimum_block_size, max_alloc, buffer_full_watermark);
 
     size_t const tlen = 2000;
     char* const buf1 = new char [tlen];
@@ -184,7 +184,7 @@ int main()
 
   if (1)
   {
-    MyOutputBuffer* sb = new MyOutputBuffer(nullptr, minimum_blocksize, max_alloc, buffer_full_watermark);
+    MyOutputBuffer* sb = new MyOutputBuffer(nullptr, minimum_block_size, max_alloc, buffer_full_watermark);
 
     Dout(dc::notice, "m_minimum_block_size = " << sb->m_minimum_block_size);
     Dout(dc::notice, "has_multiple_blocks() = " << sb->has_multiple_blocks());

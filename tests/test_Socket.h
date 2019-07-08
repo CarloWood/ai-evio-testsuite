@@ -1,4 +1,5 @@
 #include "evio/ListenSocket.h"
+#include "evio/AcceptedSocket.h"
 #include "evio/EventLoopThread.h"
 #include "threadpool/Timer.h"
 #include "threadpool/AIThreadPool.h"
@@ -7,11 +8,11 @@
 #include <libcwd/buf2str.h>
 #endif
 
-int constexpr burst_size = 1000000;     // Write this many times 100 bytes.
+size_t constexpr burst_size = 1000000;     // Write this many times 100 bytes.
 
 using evio::MsgBlock;
 
-class MyDecoder : public evio::InputDecoder
+class MyDecoder : public evio::InputDecoder // Protocol
 {
  private:
   size_t m_received;
@@ -22,24 +23,17 @@ class MyDecoder : public evio::InputDecoder
 
  protected:
   NAD_DECL(decode, MsgBlock&& msg) override;
+
+  size_t minimum_block_size_estimate() const override { return 4096; }
 };
 
-class MyAcceptedSocket : public evio::Socket
+class MyOutputStream4096 : public evio::OutputStream // Protocol
 {
- private:
-  MyDecoder m_input;
-  evio::OutputStream m_output;
-
- public:
-  MyAcceptedSocket()
-  {
-    set_sink(m_input);
-    set_source(m_output);
-  }
-  ~MyAcceptedSocket() { Dout(dc::notice, "~MyAcceptedSocket() [" << this << "]"); }
-
-  evio::OutputStream& operator()() { return m_output; }
+ protected:
+  size_t minimum_block_size_estimate() const override { return 4096; }
 };
+
+using MyAcceptedSocket = evio::AcceptedSocket<MyDecoder, MyOutputStream4096>;
 
 class MyListenSocket : public evio::ListenSocket<MyAcceptedSocket>
 {
@@ -53,7 +47,7 @@ class MyListenSocket : public evio::ListenSocket<MyAcceptedSocket>
     {
       Dout(dc::notice, "New connection to listen socket was accepted. Sending " << (100 * burst_size) << " of data.");
       // Write 10 Mbyte of data.
-      for (int n = 0; n < burst_size; ++n)
+      for (size_t n = 0; n < burst_size; ++n)
         accepted_socket() << "START012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789END.\n";
       accepted_socket() << std::flush;
       accepted_socket.flush_output_device();
@@ -151,7 +145,7 @@ TEST(Socket, Constructor)
   {
     // Construct MyDecoder before EventLoop, so that the EventLoop is destructed first!
     // Otherwise the decoder is destructed before we can use it (in the destructor of event_loop).
-    MyDecoder decoder;
+    //MyDecoder decoder;
 
     // Initialize the IO event loop thread.
     evio::EventLoop event_loop(queue_handle);
@@ -170,7 +164,7 @@ TEST(Socket, Constructor)
       // Connect a socket to the listen socket.
       auto socket = evio::create<MyClientSocket>();
       socket->set_source(socket, 1024 - evio::block_overhead_c, 4096, 1000000);
-      //socket->set_sink(decoder, 1024 - evio::block_overhead_c, 4096, 100000000);
+      //socket->set_sink(decoder, 4096, 100000000);
       socket->connect(listen_address);
       //socket->flush_output_device();
     }

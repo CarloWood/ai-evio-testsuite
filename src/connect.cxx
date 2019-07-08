@@ -3,7 +3,7 @@
 #include "threadpool/AIThreadPool.h"
 #include "evio/EventLoopThread.h"
 #include "evio/ListenSocket.h"
-#include "evio/Socket.h"
+#include "evio/AcceptedSocket.h"
 #include "threadpool/Timer.h"
 #include "utils/AIAlert.h"
 #include "utils/debug_ostream_operators.h"
@@ -38,12 +38,12 @@ class MyDecoder : public InputDecoder
 
 // This is the type of the accepted socket when a new client connects to our listen socket.
 // It registers both input and output - but also doesn't write anything.
-class MyAcceptedSocket : public Socket
+class MyAcceptedSocket : public evio::AcceptedSocket<MyDecoder, OutputStream>
 {
  public:
-  using VT_type = Socket::VT_type;
+  using VT_type = evio::AcceptedSocket<MyDecoder, OutputStream>::VT_type;
 
-  struct VT_impl : Socket::VT_impl
+  struct VT_impl : evio::AcceptedSocket<MyDecoder, OutputStream>::VT_impl
   {
     // Override
     static NAD_DECL(read_returned_zero, InputDevice* _self)
@@ -74,17 +74,9 @@ class MyAcceptedSocket : public Socket
 
   // Make a deep copy of VT_ptr.
   VT_type* clone_VT() override { return VT_ptr.clone(this); }
-  utils::VTPtr<MyAcceptedSocket, Socket> VT_ptr;
+  utils::VTPtr<MyAcceptedSocket, evio::AcceptedSocket<MyDecoder, OutputStream>> VT_ptr;
 
-  MyAcceptedSocket() : VT_ptr(this)
-  {
-    set_sink(m_input);
-    set_source(m_output);
-  }
-
- private:
-  MyDecoder m_input;
-  OutputStream m_output;
+  MyAcceptedSocket() : VT_ptr(this) { }
 };
 
 // The type of our listen socket: for each incoming connection a MyAcceptedSocket is spawned.

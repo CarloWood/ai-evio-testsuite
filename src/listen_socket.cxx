@@ -3,7 +3,7 @@
 #include "threadpool/AIThreadPool.h"
 #include "evio/EventLoopThread.h"
 #include "evio/ListenSocket.h"
-#include "evio/Socket.h"
+#include "evio/AcceptedSocket.h"
 #include "threadpool/Timer.h"
 #include "utils/AIAlert.h"
 #include "utils/debug_ostream_operators.h"
@@ -34,21 +34,7 @@ class MyDecoder : public InputDecoder
   NAD_DECL(decode, MsgBlock&& msg) override;
 };
 
-class MyAcceptedSocket : public Socket
-{
- private:
-  MyDecoder m_input;
-  OutputStream m_output;
-
- public:
-  MyAcceptedSocket()
-  {
-    set_sink(m_input);
-    set_source(m_output);
-  }
-
-  OutputStream& operator()() { return m_output; }
-};
+using MyAcceptedSocket = evio::AcceptedSocket<MyDecoder, OutputStream>;
 
 class MyListenSocket : public ListenSocket<MyAcceptedSocket>
 {

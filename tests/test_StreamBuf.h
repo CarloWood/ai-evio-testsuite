@@ -53,11 +53,16 @@ class StreamBuf_OutputDevice : public NoEpollOutputDevice
 
 #include "EventLoopFixture.h"
 
+class MyOutputStream32 : public evio::OutputStream
+{
+  size_t minimum_block_size_estimate() const override { return 32; }
+};
+
 class OutputBufferFixture : public EventLoopFixture<testing::Test>
 {
  protected:
   boost::intrusive_ptr<StreamBuf_OutputDevice> m_output_device;
-  evio::OutputStream m_output;
+  MyOutputStream32 m_output;
   evio::OutputBuffer* m_buffer;
   size_t m_min_block_size;
 
@@ -79,10 +84,9 @@ class OutputBufferFixture : public EventLoopFixture<testing::Test>
     m_output_device->init(1);           // Otherwise the device is not 'writable', which has influence on certain buffer functions (ie, sync()).
     m_output_device->set_dont_close();
     // Create an OutputBuffer for it.
-    m_output_device->set_source(m_output, 32);
+    m_output_device->set_source(m_output);
     m_buffer = m_output_device->get_obuffer();
-    // Calculate the actual minimum block size, see StreamBuf::StreamBuf.
-    m_min_block_size = utils::malloc_size(m_buffer->m_minimum_block_size + sizeof(evio::MemoryBlock)) - sizeof(evio::MemoryBlock);
+    m_min_block_size = m_buffer->m_minimum_block_size;
   }
 
   void TearDown()
@@ -471,7 +475,7 @@ class LinkBufferFixture : public EventLoopFixture<testing::Test>
     m_output_device->init(m_pipefd[0]); // Otherwise the device is not 'writable', which has influence on certain buffer functions (ie, sync()).
     m_output_device->set_dont_close();
     // Create a LinkBuffer for it.
-    m_output_device->set_source(m_input_device, minimum_block_size, 8 * minimum_block_size, -1);
+    m_output_device->set_source(m_input_device, minimum_block_size);
     m_buffer = static_cast<evio::LinkBuffer*>(static_cast<evio::Dev2Buf*>(m_input_device->get_ibuffer()));
     // Calculate the actual minimum block size, see StreamBuf::StreamBuf.
     m_min_block_size = utils::malloc_size(m_buffer->m_minimum_block_size + sizeof(evio::MemoryBlock)) - sizeof(evio::MemoryBlock);
@@ -488,6 +492,8 @@ class LinkBufferFixture : public EventLoopFixture<testing::Test>
     Dout(dc::notice, "v LinkBufferFixture::TearDown()");
     debug::Mark teardown;
 #endif
+    m_input_device->close();
+    m_output_device->close();
     force_exit();
     m_input_device.reset();
     m_output_device.reset();
