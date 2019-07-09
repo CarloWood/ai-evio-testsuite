@@ -302,7 +302,7 @@ TEST_F(TestIODevice, StartStop)
   //
   // Input- and Output- Devices are modelled as follows:
   //
-  //   The PutThread      .--------.     The EventLoopThread reads
+  //   The PutThread      .--------.     The EventLoopThread
   //    write to the  ==> | buffer | ==> reads from the buffer and   ==> OutputDevice
   //   output buffer      `--------'     writes to the OutPutDevice
   //
@@ -321,7 +321,7 @@ TEST_F(TestIODevice, StartStop)
   //
   // Both, InputDevice and OutputDevice represent a file descriptor (possibly the same
   // one). When libev is asked to monitor a file descriptor for read- or writablity,
-  // it is said that the underlaying ev_io 'watcher' struct is made 'active'.
+  // it is said that the underlaying FileDescriptor object is made 'active'.
   // The evio library speaks about starting a device to make it active, and stopping it
   // to make it inactive.
   //
@@ -346,7 +346,7 @@ TEST_F(TestIODevice, StartStop)
   // guarantee that an InputDevice is started exclusively by the GetThread, either
   // after reading something from a full buffer, or by re-enabling an InputDevice.
   //
-  // The important parts of the above is where a transition is exclusive to either
+  // The important part of the above is where a transition is exclusive to either
   // the PutThread or the GetThread. So we have:
   //
   // OutputDevice

@@ -520,7 +520,7 @@ class RandomFixture : public LinkBufferFixture
   std::atomic_bool done;
 
   RandomFixture() :
-    size_hash_pair(utils::HasherStreamBuf::size_hash_pairs[8]), // 10^8 bytes.
+    size_hash_pair(utils::HasherStreamBuf::size_hash_pairs[7]), // 10^7 bytes.
     random(size_hash_pair.size, 'A', 'Z'),
     buf(minimum_block_size + 3),
     random_engine(160433238),
