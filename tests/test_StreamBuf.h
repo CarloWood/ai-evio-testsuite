@@ -65,6 +65,7 @@ class OutputBufferFixture : public EventLoopFixture<testing::Test>
   MyOutputStream32 m_output;
   evio::OutputBuffer* m_buffer;
   size_t m_min_block_size;
+  int m_pipefd[2];
 
   evio::GetThread const get_type{};
   evio::PutThread const put_type{};
@@ -81,7 +82,9 @@ class OutputBufferFixture : public EventLoopFixture<testing::Test>
     EventLoopFixture<testing::Test>::SetUp();
     // Create a test OutputDevice.
     m_output_device = evio::create<StreamBuf_OutputDevice>();
-    m_output_device->init(1);           // Otherwise the device is not 'writable', which has influence on certain buffer functions (ie, sync()).
+    int res = pipe2(m_pipefd, O_NONBLOCK | O_CLOEXEC);
+    ASSERT(res == 0);
+    m_output_device->init(m_pipefd[1]);           // Otherwise the device is not 'writable', which has influence on certain buffer functions (ie, sync()).
     m_output_device->set_dont_close();
     // Create an OutputBuffer for it.
     m_output_device->set_source(m_output);
@@ -96,8 +99,11 @@ class OutputBufferFixture : public EventLoopFixture<testing::Test>
     debug::Mark setup;
 #endif
 
+    m_output_device->close();
     force_exit();
     m_output_device.reset();
+    ::close(m_pipefd[1]);
+    ::close(m_pipefd[0]);
     // m_output can be reused (the call to set_source() above will effectively reset it).
     EventLoopFixture<testing::Test>::TearDown();
   }
