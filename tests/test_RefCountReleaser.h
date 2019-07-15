@@ -1,6 +1,6 @@
 // Testsuite for evio::RefCountReleaser.
 //
-// TestObject is derived from AIRefCount with the usual
+// TestObject is derived from AIRefCount (through evio::FileDescriptor) with the usual
 // characteristic:
 //
 // 1) It can only be created on the heap (with operator new).
@@ -8,11 +8,12 @@
 //    points to the object is destructed.
 
 #include "evio/RefCountReleaser.h"
+#include "evio/EventLoopThread.h"
 #include <cassert>
 
 class ExpectDeletionOf;
 
-class TestObject : public AIRefCount
+class TestObject : public evio::FileDescriptor
 {
  private:
   friend class ExpectDeletionOf;
@@ -49,6 +50,7 @@ class ExpectDeletionOf
   {
     // Call the assignment operator before destructing this object.
     assert(m_initialized);
+    evio::EventLoopThread::instance().garbage_collection();
     ASSERT_TRUE(m_destructed) << "Expected TestObject to be deleted. Actual: it was not deleted.";
   }
 };
@@ -84,7 +86,7 @@ TEST(RefCountReleaser, LeavingScopeWithoutDestruction)
 TEST(RefCountReleaser, DefaultConstructor)
 {
   // Fix the testsuite when this changes.
-  assert(sizeof(evio::RefCountReleaser) == sizeof(AIRefCount*));
+  assert(sizeof(evio::RefCountReleaser) == sizeof(evio::FileDescriptor*));
 
   // This basically does nothing.
   {

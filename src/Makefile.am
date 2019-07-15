@@ -1,6 +1,6 @@
 AM_CPPFLAGS = -iquote $(top_srcdir) -iquote $(top_srcdir)/cwds
 
-bin_PROGRAMS = sockaddr_storage arpa socket_address buffer_test filedescriptor socket_fd socket listen_socket ofstream_data_test connect signals_test epoll_bug
+bin_PROGRAMS = sockaddr_storage arpa socket_address buffer_test filedescriptor socket_fd socket listen_socket ofstream_data_test connect signals_test epoll_bug epoll_threadsafety interface
 
 sockaddr_storage_SOURCES = sockaddr_storage.cxx
 sockaddr_storage_CXXFLAGS = @LIBCWD_R_FLAGS@
@@ -50,6 +50,14 @@ epoll_bug_SOURCES = epoll_bug.c
 epoll_bug_CXXFLAGS =
 epoll_bug_LDADD =
 
+epoll_threadsafety_SOURCES = epoll_threadsafety.cxx
+epoll_threadsafety_CXXFLAGS = @LIBCWD_R_FLAGS@
+epoll_threadsafety_LDADD = ../cwds/libcwds_r.la
+
+interface_SOURCES = interface.cxx
+interface_CXXFLAGS = @LIBCWD_R_FLAGS@
+interface_LDADD = ../evio/libevio.la ../threadpool/libthreadpool.la ../threadsafe/libthreadsafe.la ../utils/libutils_r.la ../cwds/libcwds_r.la
+
 # --------------- Maintainer's Section
 
 if MAINTAINER_MODE
@@ -71,12 +79,12 @@ genmc_%.hc: ${srcdir}/genmc_%.awk ${srcdir}/genmc_prelude.awk ${srcdir}/genmc_bo
 .PHONY: genmc
 
 genmc: genmc_buffer_reset_test.c ${GENMC_H} ${GENMC_HC}
-#	genmc -unroll=5 -- -std=c11 -I${builddir} ${srcdir}/genmc_buffer_reset_test.c
+	genmc -unroll=5 -- -std=c11 -I${builddir} ${srcdir}/genmc_buffer_reset_test.c
 #	Use this to get everything in a single file for easier debugging.
-	grep -B 1000 'INCLUDES_BEGIN' ${srcdir}/genmc_buffer_reset_test.c > ${srcdir}/genmc_all.c
-	cat ${GENMC_H} ${GENMC_HC} >> ${srcdir}/genmc_all.c
-	grep -A 1000 'INCLUDES_END' ${srcdir}/genmc_buffer_reset_test.c >> ${srcdir}/genmc_all.c
-	genmc -unroll=5 -pretty-print-exec-graphs -print-error-trace -- -std=c11 -I${builddir} ${srcdir}/genmc_all.c
+#	grep -B 1000 'INCLUDES_BEGIN' ${srcdir}/genmc_buffer_reset_test.c > ${srcdir}/genmc_all.c
+#	cat ${GENMC_H} ${GENMC_HC} >> ${srcdir}/genmc_all.c
+#	grep -A 1000 'INCLUDES_END' ${srcdir}/genmc_buffer_reset_test.c >> ${srcdir}/genmc_all.c
+#	genmc -unroll=5 -pretty-print-exec-graphs -print-error-trace -- -std=c11 -I${builddir} ${srcdir}/genmc_all.c
 endif
 
 MAINTAINERCLEANFILES = $(srcdir)/Makefile.in

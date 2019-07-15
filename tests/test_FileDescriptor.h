@@ -88,6 +88,7 @@ class FileDescriptor : public virtual evio::FileDescriptor
 
   static void test_all_instances_were_destructed()
   {
+    evio::EventLoopThread::instance().garbage_collection();
     EXPECT_EQ(s_instance_count, 0);
   }
 
@@ -220,8 +221,8 @@ class TestDestruction : public EventLoopFixture<testing::Test>
   void TearDown() override
   {
     Dout(dc::notice, "v TestDestruction::TearDown()");
-    CALL(FileDescriptor::test_all_instances_were_destructed());
     EventLoopFixture<testing::Test>::TearDown();
+    CALL(FileDescriptor::test_all_instances_were_destructed());
   }
 };
 

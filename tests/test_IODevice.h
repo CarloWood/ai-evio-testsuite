@@ -10,6 +10,10 @@
 #include <unistd.h>
 #include <sys/socket.h>
 
+#ifndef DEBUG_EPOLL_PWAIT_DELAY_MICROSECONDS
+#define DEBUG_EPOLL_PWAIT_DELAY_MICROSECONDS 0
+#endif
+
 using evio::RefCountReleaser;
 
 #include "MyDummyDecoder.h"
@@ -75,9 +79,11 @@ struct InputDevice : public NoEpollInputDevice
   {
     evio::InputDevice::init(fd);
     set_sink(m_decoder);
+#if 0
     // Set this to regular_file in order to avoid epoll being called (which isn't initialized).
     state_t::wat state_w(m_state);
     state_w->m_flags.set_regular_file();
+#endif
   }
 
 #ifdef CWDEBUG
@@ -254,14 +260,14 @@ class TestIODevice : public TestIODeviceNoInit
       EXPECT_TRUE(nad_rcr); // To cancel inhibit_deletion of being added.
       // No NAD_PUBLIC_END (immediately call allow_deletion()).
     }
+    // Perform a garbage_collection().
+    evio::EventLoopThread::instance().wake_up();
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
     // Make sure these are really the last references.
     EXPECT_TRUE(m_input_device->unique().is_true());
     EXPECT_TRUE(m_output_device->unique().is_true());
     m_input_device.reset();             // Release last reference to device; this should close it.
     m_output_device.reset();            // Release last reference to device; this should close it.
-    // By now both file descriptors should be closed.
-    EXPECT_FALSE(evio::is_valid(pipefd[0]));
-    EXPECT_FALSE(evio::is_valid(pipefd[1]));
     TestIODeviceNoInit::TearDown();
   }
 };
@@ -481,6 +487,11 @@ TEST_F(TestIODevice, DisableStartEnableStartStop)
   // Removing them...
   m_input_device->remove_input_device();
   m_output_device->remove_output_device();
+
+  // Also wait for the read_event() that was queued in the thread pool,
+  // which also caused an inhibit_deletion(). read_from_fd
+  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
   // And the inhibit_deletion was cancelled.
   EXPECT_TRUE(m_input_device->unique().is_true());
   EXPECT_TRUE(m_output_device->unique().is_true());
@@ -613,9 +624,8 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
     };
   };
 
-  // Make a deep copy of VT_ptr.
+  // These two lines must be in THIS order (clone_VT first)!
   VT_type* clone_VT() override { return VT_ptr.clone(this); }
-
   utils::VTPtr<TestSocket, evio::InputDevice, evio::OutputDevice> VT_ptr;
 
  public:
@@ -777,8 +787,14 @@ TEST_F(IODeviceFixture, write_to_fd_read_from_fd)
 
   output << std::flush;                                               // This writes to the buffer and calls start_input_device()...
   output << request_close(200);                                       // (this is just written to the buffer again)
+#if DEBUG_EPOLL_PWAIT_DELAY_MICROSECONDS
+  std::this_thread::sleep_for(std::chrono::microseconds(DEBUG_EPOLL_PWAIT_DELAY_MICROSECONDS));
+#endif
   std::this_thread::sleep_for(std::chrono::milliseconds(1));
   EXPECT_EQ(io_device->write_to_fd_count(), 2);                       // ...so that TestSocket::write_to_fd is called again to write the buffer to the socket.
+#if DEBUG_EPOLL_PWAIT_DELAY_MICROSECONDS
+  std::this_thread::sleep_for(std::chrono::microseconds(DEBUG_EPOLL_PWAIT_DELAY_MICROSECONDS));
+#endif
   std::this_thread::sleep_for(std::chrono::milliseconds(199));        // That message is sent to the http server, which sends 200 ms later a message back that we receive again
   EXPECT_EQ(io_device->read_from_fd_count(), 0);                      // but not yet...
   std::this_thread::sleep_for(std::chrono::milliseconds(2));          // but now we should have...
@@ -800,9 +816,15 @@ TEST_F(IODeviceFixture, read_returned_zero)
   EXPECT_EQ(io_device->read_returned_zero_count(), 0);
 
   output << std::flush;                                               // This writes to the buffer and calls start_input_device(),
+#if DEBUG_EPOLL_PWAIT_DELAY_MICROSECONDS
+  std::this_thread::sleep_for(std::chrono::microseconds(DEBUG_EPOLL_PWAIT_DELAY_MICROSECONDS));
+#endif
   std::this_thread::sleep_for(std::chrono::milliseconds(1));          // so that TestSocket::write_to_fd is called again to write the buffer to the socket.
   EXPECT_EQ(io_device->write_to_fd_count(), 2);
   std::this_thread::sleep_for(std::chrono::milliseconds(199));        // That message is sent to the http server, which closes the socket 200 ms later...
+#if DEBUG_EPOLL_PWAIT_DELAY_MICROSECONDS
+  std::this_thread::sleep_for(std::chrono::microseconds(DEBUG_EPOLL_PWAIT_DELAY_MICROSECONDS));
+#endif
   // Very sometimes this is 1 because the test application stalled for 1 millisecond somewhere.
   EXPECT_EQ(io_device->read_from_fd_count(), 0);                      // but not yet...
   std::this_thread::sleep_for(std::chrono::milliseconds(2));          // but now we should have...
@@ -816,8 +838,14 @@ TEST_F(IODeviceFixture, request_with_close)
   decoder.dont_stop();                                                // Don't close the fd after reading one message.
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
   output << generate_request_with_close(1, 10) << std::flush;         // Server will wait 10 ms then write one message and immediately close the fd.
+#if DEBUG_EPOLL_PWAIT_DELAY_MICROSECONDS
+  std::this_thread::sleep_for(std::chrono::microseconds(DEBUG_EPOLL_PWAIT_DELAY_MICROSECONDS));
+#endif
   std::this_thread::sleep_for(std::chrono::milliseconds(20));
   EXPECT_EQ(io_device->write_to_fd_count(), 2);                       // Same as above tests.
+#if DEBUG_EPOLL_PWAIT_DELAY_MICROSECONDS
+  std::this_thread::sleep_for(std::chrono::microseconds(DEBUG_EPOLL_PWAIT_DELAY_MICROSECONDS));
+#endif
   // A value of 2 instead of 1 might happen sometimes.
   EXPECT_GE(io_device->read_from_fd_count(), 1);                      // One for the message, and we now continue to read till EAGAIN - so also get the EOF (this is racy though).
   EXPECT_EQ(io_device->data_received_count(), 1);                     // One for the message.
@@ -829,6 +857,9 @@ TEST_F(IODeviceFixture, read_error)
   decoder.dont_stop();                                                // Don't close the fd after reading one message.
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
   output << generate_request_with_close(1, 10) << std::flush;         // Server will wait 10 ms then write one message and immediately close the fd.
+#if DEBUG_EPOLL_PWAIT_DELAY_MICROSECONDS
+  std::this_thread::sleep_for(std::chrono::microseconds(DEBUG_EPOLL_PWAIT_DELAY_MICROSECONDS));
+#endif
   std::this_thread::sleep_for(std::chrono::milliseconds(1));          // Give the library the time to write this message to the server.
   io_device->screw_fd();                                              // Screw our fd.
   std::this_thread::sleep_for(std::chrono::milliseconds(20));
@@ -848,8 +879,14 @@ TEST_F(IODeviceFixture, write_error)
   decoder.dont_stop();                                                // Don't close the fd after reading one message.
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
   output << generate_request_with_close(1, 1) << std::flush;          // Server will wait 1 ms then write one message and immediately close the fd.
+#if DEBUG_EPOLL_PWAIT_DELAY_MICROSECONDS
+  std::this_thread::sleep_for(std::chrono::microseconds(DEBUG_EPOLL_PWAIT_DELAY_MICROSECONDS));
+#endif
   std::this_thread::sleep_for(std::chrono::milliseconds(2));
   output << std::string(100000, 'x') << std::flush;
+#if DEBUG_EPOLL_PWAIT_DELAY_MICROSECONDS
+  std::this_thread::sleep_for(std::chrono::microseconds(DEBUG_EPOLL_PWAIT_DELAY_MICROSECONDS));
+#endif
   std::this_thread::sleep_for(std::chrono::milliseconds(10));
   EXPECT_GE(io_device->write_to_fd_count(), 2);                       // One EOF at the start and then at least one for the burst until that runs into a write error.
   EXPECT_EQ(io_device->write_error_count(), 1);
