@@ -9,6 +9,10 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/socket.h>
+// timestamp
+#include <sys/time.h>
+#include <ctime>
+#include <cstdio>
 
 #ifndef DEBUG_EPOLL_PWAIT_DELAY_MICROSECONDS
 #define DEBUG_EPOLL_PWAIT_DELAY_MICROSECONDS 0
@@ -17,6 +21,21 @@
 using evio::RefCountReleaser;
 
 #include "MyDummyDecoder.h"
+
+std::string timestamp()
+{
+  struct timeval tv;
+  time_t nowtime;
+  struct tm *nowtm;
+  char tmbuf[64], buf[80];
+
+  gettimeofday(&tv, NULL);
+  nowtime = tv.tv_sec;
+  nowtm = localtime(&nowtime);
+  strftime(tmbuf, sizeof(tmbuf), "%Y-%m-%d %H:%M:%S", nowtm);
+  snprintf(buf, sizeof(buf), "%s.%06lu: ", tmbuf, tv.tv_usec);
+  return buf;
+}
 
 // Work around the fact that InputDevice and OutputDevice have a protected constructor and protected methods.
 
@@ -436,6 +455,10 @@ TEST_F(TestIODevice, StartStop)
   m_input_device->remove_input_device();
   m_output_device->remove_output_device();
 
+  // Also wait for all events that were queued in the thread pool,
+  // which also caused an inhibit_deletion().
+  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
   // Now that the devices are removed, the inhibit was removed. remove
   EXPECT_TRUE(m_input_device->unique().is_true());
   EXPECT_TRUE(m_output_device->unique().is_true());
@@ -489,7 +512,7 @@ TEST_F(TestIODevice, DisableStartEnableStartStop)
   m_output_device->remove_output_device();
 
   // Also wait for the read_event() that was queued in the thread pool,
-  // which also caused an inhibit_deletion(). read_from_fd
+  // which also caused an inhibit_deletion().
   std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
   // And the inhibit_deletion was cancelled.
@@ -546,14 +569,15 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
 {
  private:
   int m_socket_fd;
-  int m_write_to_fd_count;
-  int m_read_from_fd_count;
-  int m_read_returned_zero_count;
-  int m_read_error_count;
-  int m_data_received_count;
-  int m_write_error_count;
   int m_real_fd;
   std::function<void()> m_write_error_detected;
+  std::atomic_int m_write_to_fd_count;
+  std::atomic_int m_read_from_fd_count;
+  std::atomic_int m_hup_count;
+  std::atomic_int m_read_returned_zero_count;
+  std::atomic_int m_read_error_count;
+  std::atomic_int m_data_received_count;
+  std::atomic_int m_write_error_count;
 
  public:
   struct VT_type : evio::InputDevice::VT_type, evio::OutputDevice::VT_type
@@ -564,21 +588,34 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
   {
     static NAD_DECL(read_from_fd, evio::InputDevice* _self, int fd)
     {
-      DoutEntering(dc::notice|flush_cf, "TestSocket::read_from_fd(" NAD_DoutEntering_ARG << (void*)_self << ", " << fd << ")");
+      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::read_from_fd(" NAD_DoutEntering_ARG0 << (void*)_self << ", " << fd << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_read_from_fd_count++;
       NAD_CALL(evio::InputDevice::VT_impl::read_from_fd, _self, fd);
     }
+    static NAD_DECL_CWDEBUG_ONLY(hup, InputDevice* _self, int CWDEBUG_ONLY(fd))
+    {
+      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::hup(" NAD_DoutEntering_ARG0 << (void*)_self << ", " << fd << ")");
+      TestSocket* self = static_cast<TestSocket*>(_self);
+      self->m_hup_count++;
+      // Allow the writing thread to get its write error before the HUP closes the fd.
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    static NAD_DECL_CWDEBUG_ONLY(exceptional, InputDevice* _self, int CWDEBUG_ONLY(fd))
+    {
+      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::exceptional(" NAD_DoutEntering_ARG0 << (void*)_self << ", " << fd << ")");
+      // Suppress exceptional event.
+    }
     static NAD_DECL(read_returned_zero, evio::InputDevice* _self)
     {
-      DoutEntering(dc::notice|flush_cf, "TestSocket::read_returned_zero(" NAD_DoutEntering_ARG << (void*)_self << ")");
+      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::read_returned_zero(" NAD_DoutEntering_ARG0 << (void*)_self << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_read_returned_zero_count++;
       NAD_CALL(evio::InputDevice::VT_impl::read_returned_zero, _self);
     }
     static NAD_DECL(read_error, evio::InputDevice* _self, int err)
     {
-      DoutEntering(dc::notice|flush_cf, "TestSocket::read_error(" NAD_DoutEntering_ARG << (void*)_self << ", " << err << ")");
+      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::read_error(" NAD_DoutEntering_ARG0 << (void*)_self << ", " << err << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_read_error_count++;
       self->unscrew_fd();
@@ -586,21 +623,22 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
     }
     static NAD_DECL(data_received, evio::InputDevice* _self, char const* new_data, size_t rlen)
     {
-      DoutEntering(dc::notice|flush_cf, "TestSocket::data_received(" NAD_DoutEntering_ARG << (void*)_self << ", \"" << libcwd::buf2str(new_data, rlen) << "\", " << rlen << ")");
+      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::data_received(" NAD_DoutEntering_ARG0 << (void*)_self << ", \"" <<
+          libcwd::buf2str(new_data, rlen) << "\", " << rlen << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_data_received_count++;
       NAD_CALL(evio::InputDevice::VT_impl::data_received, _self, new_data, rlen);
     }
     static NAD_DECL(write_to_fd, evio::OutputDevice* _self, int fd)
     {
-      DoutEntering(dc::notice|flush_cf, "TestSocket::write_to_fd(" NAD_DoutEntering_ARG << (void*)_self << ", " << fd << ")");
+      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::write_to_fd(" NAD_DoutEntering_ARG0 << (void*)_self << ", " << fd << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_write_to_fd_count++;
       NAD_CALL(OutputDevice::VT_impl::write_to_fd, _self, fd);
     }
     static NAD_DECL(write_error, OutputDevice* _self, int err)
     {
-      DoutEntering(dc::notice|flush_cf, "TestSocket::write_error(" NAD_DoutEntering_ARG << _self << ", " << err << ")");
+      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::write_error(" NAD_DoutEntering_ARG0 << _self << ", " << err << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_write_error_count++;
       self->m_write_error_detected();
@@ -629,7 +667,7 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
   utils::VTPtr<TestSocket, evio::InputDevice, evio::OutputDevice> VT_ptr;
 
  public:
-  TestSocket() : m_socket_fd(-1), m_write_to_fd_count(0), m_read_from_fd_count(0), m_read_returned_zero_count(0),
+  TestSocket() : m_socket_fd(-1), m_write_to_fd_count(0), m_read_from_fd_count(0), m_hup_count(0), m_read_returned_zero_count(0),
                  m_read_error_count(0), m_data_received_count(0), m_write_error_count(0),
                  VT_ptr(this) { DoutEntering(dc::evio, "TestSocket::TestSocket() [" << this << "]"); }
 
@@ -698,6 +736,7 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
 
   int write_to_fd_count() const { return m_write_to_fd_count; }
   int read_from_fd_count() const { return m_read_from_fd_count; }
+  int hup_count() const { return m_hup_count; }
   int read_returned_zero_count() const { return m_read_returned_zero_count; }
   int read_error_count() const { return m_read_error_count; }
   int data_received_count() const { return m_data_received_count; }
@@ -719,7 +758,7 @@ class TestInputDecoder : public evio::InputDecoder
   NAD_DECL(decode, evio::MsgBlock&& msg) override
   {
     // Just print what was received.
-    DoutEntering(dc::notice, "TestInputDecoder::decode(\"" NAD_DoutEntering_ARG << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
+    DoutEntering(dc::notice, timestamp() << "TestInputDecoder::decode(\"" NAD_DoutEntering_ARG << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
     m_received += msg.get_size();
     // Stop after receiving just one message.
     if (m_stop_after_one_message)
@@ -797,8 +836,14 @@ TEST_F(IODeviceFixture, write_to_fd_read_from_fd)
 #endif
   std::this_thread::sleep_for(std::chrono::milliseconds(199));        // That message is sent to the http server, which sends 200 ms later a message back that we receive again
   EXPECT_EQ(io_device->read_from_fd_count(), 0);                      // but not yet...
+  Dout(dc::notice, timestamp() << "Start 2 ms sleep.");
   std::this_thread::sleep_for(std::chrono::milliseconds(2));          // but now we should have...
+  // Wait till all threads are finished.
+  size_t wt =100;
+  while (io_device->is_busy())
+    std::this_thread::sleep_for(std::chrono::microseconds(wt *= 2));
   // This is >= 1, because sometimes read() returns EAGAIN - causing a second call to read_from_fd.
+  Dout(dc::notice, "Running final checks...");
   EXPECT_GE(io_device->read_from_fd_count(), 1);                      // causing a call to TestSocket::read_from_fd,
   EXPECT_EQ(io_device->data_received_count(), 1);                     // which called data_received().
   EXPECT_EQ(io_device->read_returned_zero_count(), 1);                // read_from_fd continues reading till we reached EOF (or EGAIN).
@@ -890,6 +935,7 @@ TEST_F(IODeviceFixture, write_error)
   std::this_thread::sleep_for(std::chrono::milliseconds(10));
   EXPECT_GE(io_device->write_to_fd_count(), 2);                       // One EOF at the start and then at least one for the burst until that runs into a write error.
   EXPECT_EQ(io_device->write_error_count(), 1);
+  EXPECT_EQ(io_device->hup_count(), 1);                               // Probably called in parallel (while we were still writing to the socket).
 }
 
 #ifdef CWDEBUG

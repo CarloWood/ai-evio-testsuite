@@ -30,6 +30,12 @@ class EventLoopFixture : public BASE
     m_clean_exit = true;
   }
 
+  void destruct_thread_pool()
+  {
+    m_thread_pool.change_number_of_threads_to(0);
+    AIThreadPool dummy(std::move(m_thread_pool));
+  }
+
   void TearDown()
   {
 #ifdef CWDEBUG
@@ -54,11 +60,7 @@ class EventLoopFixture : public BASE
       m_event_loop->join();
     delete m_event_loop;
     m_low_priority_handler.set_to_undefined();
-    {
-      // Destruct the thread pool.
-      m_thread_pool.change_number_of_threads_to(0);
-      AIThreadPool dummy(std::move(m_thread_pool));
-    }
+    destruct_thread_pool();
     if constexpr (!std::is_same_v<BASE, testing::Test>)
       BASE::TearDown();
     utils::Signals::instance().block_and_unregister(SIGPIPE);

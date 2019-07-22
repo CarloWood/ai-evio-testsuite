@@ -82,7 +82,7 @@ class OutputBufferFixture : public EventLoopFixture<testing::Test>
     EventLoopFixture<testing::Test>::SetUp();
     // Create a test OutputDevice.
     m_output_device = evio::create<StreamBuf_OutputDevice>();
-    int res = pipe2(m_pipefd, O_NONBLOCK | O_CLOEXEC);
+    [[maybe_unused]] int res = pipe2(m_pipefd, O_NONBLOCK | O_CLOEXEC);
     ASSERT(res == 0);
     m_output_device->init(m_pipefd[1]);           // Otherwise the device is not 'writable', which has influence on certain buffer functions (ie, sync()).
     m_output_device->set_dont_close();

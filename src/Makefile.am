@@ -1,6 +1,15 @@
 AM_CPPFLAGS = -iquote $(top_srcdir) -iquote $(top_srcdir)/cwds
 
-bin_PROGRAMS = sockaddr_storage arpa socket_address buffer_test filedescriptor socket_fd socket listen_socket ofstream_data_test connect signals_test epoll_bug epoll_threadsafety interface
+bin_PROGRAMS = sockaddr_storage arpa socket_address buffer_test filedescriptor socket_fd socket listen_socket \
+	       ofstream_data_test connect signals_test epoll_bug interface function_size epoll_states
+
+epoll_states_SOURCES = epoll_states.cxx
+epoll_states_CXXFLAGS = -pthread
+epoll_states_LDADD =
+
+function_size_SOURCES  = function_size.cxx
+function_size_CXXFLAGS = @LIBCWD_R_FLAGS@
+function_size_LDADD = ../cwds/libcwds_r.la
 
 sockaddr_storage_SOURCES = sockaddr_storage.cxx
 sockaddr_storage_CXXFLAGS = @LIBCWD_R_FLAGS@
@@ -49,10 +58,6 @@ signals_test_LDADD = ../threadpool/libthreadpool.la ../threadsafe/libthreadsafe.
 epoll_bug_SOURCES = epoll_bug.c
 epoll_bug_CXXFLAGS =
 epoll_bug_LDADD =
-
-epoll_threadsafety_SOURCES = epoll_threadsafety.cxx
-epoll_threadsafety_CXXFLAGS = @LIBCWD_R_FLAGS@
-epoll_threadsafety_LDADD = ../cwds/libcwds_r.la
 
 interface_SOURCES = interface.cxx
 interface_CXXFLAGS = @LIBCWD_R_FLAGS@
