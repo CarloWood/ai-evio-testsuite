@@ -8,7 +8,7 @@
 #include <libcwd/buf2str.h>
 #endif
 
-size_t constexpr burst_size = 10000;     // Write this many times 100 bytes.
+size_t constexpr burst_size = 100000;     // Write this many times 100 bytes.
 
 using evio::MsgBlock;
 
@@ -125,7 +125,7 @@ class MyClientSocket : public evio::Socket
   bool m_connected;
 
  public:
-  MyClientSocket() : VT_ptr(this), m_connected(false) { Dout(dc::notice, "MyClientSocket::VT has address: " << (void*)&VT_impl::VT); }
+  MyClientSocket() : VT_ptr(this), m_connected(false) { }
   ~MyClientSocket() { Dout(dc::notice, "~MyClientSocket() [" << this << "]"); ASSERT(m_connected); }
 };
 

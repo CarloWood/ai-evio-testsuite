@@ -126,7 +126,7 @@ class OutputBufferFixture : public EventLoopFixture<testing::Test>
     EXPECT_EQ(m_buffer->StreamBufProducer::buffer_empty().is_transitory_false(), actual_size != 0);
 
     // The buffer is empty (and there is no race condition here, so the returned value is exact).
-    EXPECT_EQ(m_buffer->get_data_size_upper_bound(), (std::streamsize)actual_size);
+    EXPECT_EQ(m_buffer->get_data_size_upper_bound(), actual_size);
   }
 };
 
