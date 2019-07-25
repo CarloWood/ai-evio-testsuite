@@ -1,6 +1,6 @@
 #pragma once
 
-#include "evio/EventLoopThread.h"
+#include "evio/EventLoop.h"
 
 template<typename BASE = testing::Test>
 class EventLoopFixture : public BASE

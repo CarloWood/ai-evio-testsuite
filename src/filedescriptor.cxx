@@ -2,8 +2,7 @@
 #include "evio/InputDevice.h"
 #include "evio/OutputDevice.h"
 #include "debug.h"
-#include "threadpool/AIThreadPool.h"
-#include "evio/EventLoopThread.h"
+#include "evio/EventLoop.h"
 #include "utils/AIAlert.h"
 #include "utils/debug_ostream_operators.h"
 #ifdef CWDEBUG

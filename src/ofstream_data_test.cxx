@@ -11,10 +11,10 @@
 
 #include "sys.h"
 #include "debug.h"
+#include "evio/EventLoop.h"
+#include "evio/PersistentInputFile.h"
 #include "utils/AIAlert.h"
 #include "utils/debug_ostream_operators.h"
-#include "evio/EventLoopThread.h"
-#include "evio/PersistentInputFile.h"
 
 using namespace evio;
 

@@ -1,8 +1,7 @@
 #include "evio/ListenSocket.h"
 #include "evio/AcceptedSocket.h"
-#include "evio/EventLoopThread.h"
+#include "evio/EventLoop.h"
 #include "threadpool/Timer.h"
-#include "threadpool/AIThreadPool.h"
 #include "utils/AISignals.h"
 #ifdef CWDEBUG
 #include <libcwd/buf2str.h>

@@ -8,7 +8,7 @@
 //    points to the object is destructed.
 
 #include "evio/RefCountReleaser.h"
-#include "evio/EventLoopThread.h"
+#include "evio/EventLoop.h"
 #include <cassert>
 
 class ExpectDeletionOf;

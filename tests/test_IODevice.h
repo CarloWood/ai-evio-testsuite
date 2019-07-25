@@ -1,7 +1,7 @@
 #include "evio/InputDevice.h"
 #include "evio/SocketAddress.h"
 #include "evio/inet_support.h"
-#include "evio/EventLoopThread.h"
+#include "evio/EventLoop.h"
 #ifdef CWDEBUG
 #include "libcwd/buf2str.h"
 #endif
