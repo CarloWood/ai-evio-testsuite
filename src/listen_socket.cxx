@@ -164,7 +164,7 @@ int main()
 NAD_DECL_CWDEBUG_ONLY(MyDecoder::decode, MsgBlock&& msg)
 {
   // Just print what was received.
-  DoutEntering(dc::notice, "MyDecoder::decode(" NAD_DoutEntering_ARG0 "\"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
+  DoutEntering(dc::notice, "MyDecoder::decode({" << allow_deletion_count << "}, \"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
   m_received += msg.get_size();
   // Stop when the last message was received.
   if (m_received == 10000)

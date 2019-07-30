@@ -337,7 +337,7 @@ class StreamBuf_InputDecoder : public evio::InputDecoder
 
   NAD_DECL_CWDEBUG_ONLY(decode, evio::MsgBlock&& CWDEBUG_ONLY(msg)) override
   {
-    DoutEntering(dc::notice, "StreamBuf_InputDecoder::decode(" << NAD_DoutEntering_ARG0 << "\"" << libcwd::buf2str(msg.get_start(), msg.get_size()) << "\")");
+    DoutEntering(dc::notice, "StreamBuf_InputDecoder::decode({" << allow_deletion_count << "}, \"" << libcwd::buf2str(msg.get_start(), msg.get_size()) << "\")");
   }
 };
 

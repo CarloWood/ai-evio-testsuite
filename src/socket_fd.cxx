@@ -153,7 +153,7 @@ void Socket::connect_to_server(char const* remote_host, int remote_port)
 // Read thread.
 NAD_DECL(Socket::VT_impl::read_from_fd, evio::InputDevice* _self, int fd)
 {
-  DoutEntering(dc::notice, "Socket::read_from_fd(" NAD_DoutEntering_ARG << fd << ")");
+  DoutEntering(dc::notice, "Socket::read_from_fd({" << allow_deletion_count << "}, " << fd << ")");
   Socket* self = static_cast<Socket*>(_self);
   char buf[256];
   ssize_t len;
@@ -178,7 +178,7 @@ NAD_DECL(Socket::VT_impl::read_from_fd, evio::InputDevice* _self, int fd)
 NAD_DECL(Socket::VT_impl::write_to_fd, evio::OutputDevice* _self, int fd)
 {
   Socket* self = static_cast<Socket*>(_self);
-  DoutEntering(dc::notice, "Socket::write_to_fd(" NAD_DoutEntering_ARG << fd << ")");
+  DoutEntering(dc::notice, "Socket::write_to_fd({" << allow_deletion_count << "}, " << fd << ")");
   if (self->m_request < 6)
   {
     std::stringstream ss;

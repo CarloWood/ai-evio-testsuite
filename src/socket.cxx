@@ -115,7 +115,7 @@ int main()
 NAD_DECL_CWDEBUG_ONLY(InputPrinter::decode, MsgBlock&& msg)
 {
   // Just print what was received.
-  DoutEntering(dc::notice, "InputPrinter::decode(" NAD_DoutEntering_ARG0 "\"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
+  DoutEntering(dc::notice, "InputPrinter::decode({" << allow_deletion_count << "}, \"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
   // Stop when the last message was received.
   if (msg.get_size() >= 17 && strncmp(msg.get_start() + msg.get_size() - 17, "#5</body></html>\n", 17) == 0)
     stop_input_device();

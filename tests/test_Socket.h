@@ -183,7 +183,7 @@ TEST(Socket, Constructor)
 NAD_DECL(MyDecoder::decode, MsgBlock&& msg)
 {
   // Just print what was received.
-  DoutEntering(dc::notice, "MyDecoder::decode(\"" NAD_DoutEntering_ARG << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
+  DoutEntering(dc::notice, "MyDecoder::decode(\"{" << allow_deletion_count << "}, " << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
   m_received += msg.get_size();
   Dout(dc::notice, "m_received = " << m_received);
   // Stop when the last message was received.

@@ -588,14 +588,14 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
   {
     static NAD_DECL(read_from_fd, evio::InputDevice* _self, int fd)
     {
-      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::read_from_fd(" NAD_DoutEntering_ARG0 << (void*)_self << ", " << fd << ")");
+      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::read_from_fd({" << allow_deletion_count << "}, " << (void*)_self << ", " << fd << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_read_from_fd_count++;
       NAD_CALL(evio::InputDevice::VT_impl::read_from_fd, _self, fd);
     }
     static NAD_DECL_CWDEBUG_ONLY(hup, InputDevice* _self, int CWDEBUG_ONLY(fd))
     {
-      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::hup(" NAD_DoutEntering_ARG0 << (void*)_self << ", " << fd << ")");
+      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::hup({" << allow_deletion_count << "}, " << (void*)_self << ", " << fd << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_hup_count++;
       // Allow the writing thread to get its write error before the HUP closes the fd.
@@ -603,19 +603,19 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
     }
     static NAD_DECL_CWDEBUG_ONLY(exceptional, InputDevice* _self, int CWDEBUG_ONLY(fd))
     {
-      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::exceptional(" NAD_DoutEntering_ARG0 << (void*)_self << ", " << fd << ")");
+      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::exceptional({" << allow_deletion_count << "}, " << (void*)_self << ", " << fd << ")");
       // Suppress exceptional event.
     }
     static NAD_DECL(read_returned_zero, evio::InputDevice* _self)
     {
-      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::read_returned_zero(" NAD_DoutEntering_ARG0 << (void*)_self << ")");
+      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::read_returned_zero({" << allow_deletion_count << "}, " << (void*)_self << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_read_returned_zero_count++;
       NAD_CALL(evio::InputDevice::VT_impl::read_returned_zero, _self);
     }
     static NAD_DECL(read_error, evio::InputDevice* _self, int err)
     {
-      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::read_error(" NAD_DoutEntering_ARG0 << (void*)_self << ", " << err << ")");
+      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::read_error({" << allow_deletion_count << "}, " << (void*)_self << ", " << err << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_read_error_count++;
       self->unscrew_fd();
@@ -623,7 +623,7 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
     }
     static NAD_DECL(data_received, evio::InputDevice* _self, char const* new_data, size_t rlen)
     {
-      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::data_received(" NAD_DoutEntering_ARG0 << (void*)_self << ", \"" <<
+      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::data_received({" << allow_deletion_count << "}, " << (void*)_self << ", \"" <<
           libcwd::buf2str(new_data, rlen) << "\", " << rlen << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_data_received_count++;
@@ -631,14 +631,14 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
     }
     static NAD_DECL(write_to_fd, evio::OutputDevice* _self, int fd)
     {
-      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::write_to_fd(" NAD_DoutEntering_ARG0 << (void*)_self << ", " << fd << ")");
+      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::write_to_fd({" << allow_deletion_count << "}, " << (void*)_self << ", " << fd << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_write_to_fd_count++;
       NAD_CALL(OutputDevice::VT_impl::write_to_fd, _self, fd);
     }
     static NAD_DECL(write_error, OutputDevice* _self, int err)
     {
-      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::write_error(" NAD_DoutEntering_ARG0 << _self << ", " << err << ")");
+      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::write_error({" << allow_deletion_count << "}, " << _self << ", " << err << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_write_error_count++;
       self->m_write_error_detected();
@@ -758,7 +758,7 @@ class TestInputDecoder : public evio::InputDecoder
   NAD_DECL(decode, evio::MsgBlock&& msg) override
   {
     // Just print what was received.
-    DoutEntering(dc::notice, timestamp() << "TestInputDecoder::decode(\"" NAD_DoutEntering_ARG << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
+    DoutEntering(dc::notice, timestamp() << "TestInputDecoder::decode({" << allow_deletion_count << "}, \"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
     m_received += msg.get_size();
     // Stop after receiving just one message.
     if (m_stop_after_one_message)

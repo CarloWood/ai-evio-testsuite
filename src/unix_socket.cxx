@@ -66,7 +66,7 @@ int main()
 NAD_DECL_CWDEBUG_ONLY(MyDecoder::decode, evio::MsgBlock&& CWDEBUG_ONLY(msg))
 {
   // Just print what was received.
-  DoutEntering(dc::notice, "MyDecoder::decode(" NAD_DoutEntering_ARG0 "\"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
+  DoutEntering(dc::notice, "MyDecoder::decode({" << allow_deletion_count << "}, \"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
   Debug(m_received += msg.get_size());
   if (std::string_view(msg.get_start(), msg.get_size()) == "Hello world!\n")
   {

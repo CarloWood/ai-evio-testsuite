@@ -46,7 +46,7 @@ class MyInputDecoder : public evio::InputDecoder
 
   NAD_DECL_CWDEBUG_ONLY(decode, evio::MsgBlock&& CWDEBUG_ONLY(msg)) override
   {
-    DoutEntering(dc::notice, "MyInputDecoder::decode(" NAD_DoutEntering_ARG "\"" << libcwd::buf2str(msg.get_start(), msg.get_size()) << "\")");
+    DoutEntering(dc::notice, "MyInputDecoder::decode({" << allow_deletion_count << "}, \"" << libcwd::buf2str(msg.get_start(), msg.get_size()) << "\")");
   }
 
   void start_input_device()

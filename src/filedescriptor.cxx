@@ -123,7 +123,7 @@ int main()
 // Read thread.
 NAD_DECL(TestInputDevice::VT_impl::read_from_fd, evio::InputDevice* _self, int fd)
 {
-  DoutEntering(dc::notice, "TestInputDevice::read_from_fd(" NAD_DoutEntering_ARG0 << fd << ")");
+  DoutEntering(dc::notice, "TestInputDevice::read_from_fd({" << allow_deletion_count << "}, " << fd << ")");
 
   char buf[256];
   ssize_t len;
@@ -146,7 +146,7 @@ NAD_DECL(TestInputDevice::VT_impl::read_from_fd, evio::InputDevice* _self, int f
 NAD_DECL(TestOutputDevice::VT_impl::write_to_fd, OutputDevice* _self, int fd)
 {
   TestOutputDevice* self = static_cast<TestOutputDevice*>(_self);
-  DoutEntering(dc::notice, "TestOutputDevice::write_to_fd(" NAD_DoutEntering_ARG << fd << ")");
+  DoutEntering(dc::notice, "TestOutputDevice::write_to_fd({" << allow_deletion_count << "}, " << fd << ")");
   [[maybe_unused]] int unused = ::write(fd, "Hello World\n", 12);
   NAD_CALL(self->stop_output_device);
 }
