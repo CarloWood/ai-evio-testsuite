@@ -231,7 +231,7 @@ struct Epoll
     cout << ">> Epoll::add_fd_with_events(" << events_to_str(events) << ")" << endl;
     assert(!m_added);
     assert(m_current_events.events == 0);
-    m_current_events = { events|EPOLLONESHOT, 0 };
+    m_current_events = { events|EPOLLONESHOT, { 0 } };
     cout << "\e[32mepoll_ctl(" << m_epoll_fd << ", EPOLL_CTL_ADD, " << m_watched_fd << ", " << events_to_str(m_current_events.events) << ")\e[0m" << endl;
     epoll_ctl(m_epoll_fd, EPOLL_CTL_ADD, m_watched_fd, &m_current_events);
     m_added = true;
@@ -243,7 +243,7 @@ struct Epoll
     assert(m_added);
     new_events |= EPOLLONESHOT;
     assert(m_current_events.events != new_events);
-    m_current_events = { new_events, 0 };
+    m_current_events = { new_events, { 0 } };
     cout << "\e[32mepoll_ctl(" << m_epoll_fd << ", EPOLL_CTL_MOD, " << m_watched_fd << ", " << events_to_str(m_current_events.events) << ")\e[0m" << endl;
     epoll_ctl(m_epoll_fd, EPOLL_CTL_MOD, m_watched_fd, &m_current_events);
   }
@@ -254,12 +254,12 @@ struct Epoll
     assert(m_added);
     cout << "\e[32mepoll_ctl(" << m_epoll_fd << ", EPOLL_CTL_DEL, " << m_watched_fd << ", nullptr)\e[0m" << endl;
     epoll_ctl(m_epoll_fd, EPOLL_CTL_DEL, m_watched_fd, nullptr);
-    m_current_events = { 0, 0 };
+    m_current_events = { 0, { 0 } };
     m_added = false;
   }
 };
 
-Epoll::Epoll(int watched_fd) : m_watched_fd(watched_fd), m_added(false), m_current_events{0, 0}
+Epoll::Epoll(int watched_fd) : m_watched_fd(watched_fd), m_added(false), m_current_events{0, {0}}
 {
   m_epoll_fd = epoll_create(1);
   cout << "\e[32m" << "epoll_create(1) = " << m_epoll_fd << "\e[0m" << endl;

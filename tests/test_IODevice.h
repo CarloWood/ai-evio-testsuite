@@ -42,22 +42,14 @@ std::string timestamp()
 struct InputDevice : public NoEpollInputDevice
 {
   using VT_type = evio::InputDevice::VT_type;
+  #define VT_InputDevice VT_NoEpollInputDevice
 
   struct VT_impl : evio::InputDevice::VT_impl
   {
     static NAD_DECL_UNUSED_ARG(read_from_fd, evio::InputDevice* UNUSED_ARG(self), int UNUSED_ARG(fd)) { } // override
 
     // Virtual table of ListenSocketDevice.
-    static constexpr VT_type VT{
-      /*InputDevice*/
-      nullptr,
-      read_from_fd,
-      nullptr,
-      nullptr,
-      nullptr,
-      nullptr,
-      nullptr
-    };
+    static constexpr VT_type VT VT_InputDevice;
   };
 
   VT_type* clone_VT() override { return VT_ptr.clone(this); }
@@ -121,22 +113,17 @@ struct InputDevice : public NoEpollInputDevice
 struct OutputDevice : public NoEpollOutputDevice
 {
   using VT_type = evio::OutputDevice::VT_type;
+  #define VT_OutputDevice VT_NoEpollOutputDevice
 
   struct VT_impl : public evio::OutputDevice::VT_impl
   {
     static NAD_DECL_UNUSED_ARG(write_to_fd, evio::OutputDevice* UNUSED_ARG(self), int UNUSED_ARG(fd)) { } // override
 
-    static constexpr VT_type VT{
-      /*OutputDevice*/
-      nullptr,
-      write_to_fd,
-      nullptr
-    };
+    static constexpr VT_type VT VT_OutputDevice;
   };
 
-  // These two lines must be in THIS order (clone_VT first)!
-  VT_type* clone_VT() override { return VT_ptr.clone(this); }           // Make a deep copy of VT_ptr.
-  utils::VTPtr<OutputDevice, evio::OutputDevice> VT_ptr;                // Virtual table pointer of this instance.
+  VT_type* clone_VT() override { return VT_ptr.clone(this); }
+  utils::VTPtr<OutputDevice, evio::OutputDevice> VT_ptr;
 
   OutputDevice() : VT_ptr(this) { }
 
@@ -582,6 +569,7 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
  public:
   struct VT_type : evio::InputDevice::VT_type, evio::OutputDevice::VT_type
   {
+    #define VT_TestSocket { VT_evio_InputDevice, VT_evio_OutputDevice }
   };
 
   struct VT_impl : evio::InputDevice::VT_impl, evio::OutputDevice::VT_impl
@@ -645,21 +633,7 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
       NAD_CALL(OutputDevice::VT_impl::write_error, _self, err);
     }
 
-    static constexpr VT_type VT{
-      /*TestSocket*/
-        /*InputDevice*/
-      { nullptr,
-        read_from_fd,
-        hup,
-        exceptional,
-        read_returned_zero,
-        read_error,
-        data_received },
-        /*OutputDevice*/
-      { nullptr,
-        write_to_fd,
-        write_error }
-    };
+    static constexpr VT_type VT VT_TestSocket;
   };
 
   // These two lines must be in THIS order (clone_VT first)!

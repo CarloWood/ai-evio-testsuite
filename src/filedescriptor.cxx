@@ -15,22 +15,14 @@ class TestInputDevice : public InputDevice
 {
  public:
   using VT_type = InputDevice::VT_type;
+  #define VT_TestInputDevice VT_evio_InputDevice
 
   struct VT_impl : InputDevice::VT_impl
   {
     static NAD_DECL(read_from_fd, InputDevice* self, int fd); // Read thread.
 
     // Virtual table of TestInputDevice.
-    static constexpr VT_type VT{
-      /*InputDevice*/
-      nullptr,
-      read_from_fd,             // override
-      hup,
-      exceptional,
-      read_returned_zero,
-      read_error,
-      data_received,
-    };
+    static constexpr VT_type VT VT_TestInputDevice;
   };
 
   VT_type* clone_VT() override { return VT_ptr.clone(this); }
@@ -56,17 +48,13 @@ class TestOutputDevice : public OutputDevice
 {
  public:
   using VT_type = OutputDevice::VT_type;
+  #define VT_TestOutputDevice VT_evio_OutputDevice
 
   struct VT_impl : OutputDevice::VT_impl
   {
     static NAD_DECL(write_to_fd, OutputDevice* self, int fd);
 
-    static constexpr VT_type VT{
-      /*OutputDevice*/
-      nullptr,
-      write_to_fd,
-      write_error
-    };
+    static constexpr VT_type VT VT_TestOutputDevice;
   };
 
   // Make a deep copy of VT_ptr.

@@ -15,8 +15,6 @@ using evio::InputBuffer;
 using evio::OutputBuffer;
 using evio::MsgBlock;
 using evio::OutputStream;
-using evio::Socket;
-using evio::ListenSocket;
 using evio::SocketAddress;
 using evio::GetThread;
 template<threadpool::Timer::time_point::rep count, typename Unit> using Interval = threadpool::Interval<count, Unit>;
@@ -41,6 +39,7 @@ class MyAcceptedSocket : public evio::AcceptedSocket<MyDecoder, OutputStream>
 {
  public:
   using VT_type = evio::AcceptedSocket<MyDecoder, OutputStream>::VT_type;
+  #define VT_MyAcceptedSocket VT_evio_AcceptedSocket
 
   struct VT_impl : evio::AcceptedSocket<MyDecoder, OutputStream>::VT_impl
   {
@@ -52,26 +51,9 @@ class MyAcceptedSocket : public evio::AcceptedSocket<MyDecoder, OutputStream>
       NAD_CALL(evio::InputDevice::VT_impl::read_returned_zero, _self);
     }
 
-    static constexpr VT_type VT{
-      /*Socket*/
-        /*InputDevice*/
-      { nullptr,
-        read_from_fd,
-        hup,
-        exceptional,
-        read_returned_zero,
-        read_error,
-        data_received },
-        /*OutputDevice*/
-      { nullptr,
-        write_to_fd,
-        write_error },
-      connected,
-      disconnected
-    };
+    static constexpr VT_type VT VT_MyAcceptedSocket;
   };
 
-  // Make a deep copy of VT_ptr.
   VT_type* clone_VT() override { return VT_ptr.clone(this); }
   utils::VTPtr<MyAcceptedSocket, evio::AcceptedSocket<MyDecoder, OutputStream>> VT_ptr;
 
@@ -79,40 +61,27 @@ class MyAcceptedSocket : public evio::AcceptedSocket<MyDecoder, OutputStream>
 };
 
 // The type of our listen socket: for each incoming connection a MyAcceptedSocket is spawned.
-class MyListenSocket : public ListenSocket<MyAcceptedSocket>
+class MyListenSocket : public evio::ListenSocket<MyAcceptedSocket>
 {
  public:
-  using VT_type = ListenSocket<MyAcceptedSocket>::VT_type;
+  using VT_type = evio::ListenSocket<MyAcceptedSocket>::VT_type;
+  #define VT_MyListenSocket VT_evio_ListenSocket
 
-  struct VT_impl : ListenSocket<MyAcceptedSocket>::VT_impl
+  struct VT_impl : evio::ListenSocket<MyAcceptedSocket>::VT_impl
   {
     // Called when a new connection is accepted.
-    static void new_connection(ListenSocket* _self, accepted_socket_type& UNUSED_ARG(accepted_socket))
+    static void new_connection(evio::ListenSocket<MyAcceptedSocket>* _self, accepted_socket_type& UNUSED_ARG(accepted_socket))
     {
       Dout(dc::notice, "New connection to listen socket was accepted.");
       _self->close();
     }
 
     // Virtual table of ListenSocket.
-    static constexpr VT_type VT{
-      /*ListenSocket*/
-        /*ListenSocketDevice*/
-      {   /*InputDevice*/
-        { nullptr,
-          read_from_fd,
-          hup,
-          exceptional,
-          read_returned_zero,
-          read_error,
-          data_received },
-        maybe_out_of_fds,
-        spawn_accepted },
-      new_connection       // Overridden
-    };
+    static constexpr VT_type VT VT_MyListenSocket;
   };
 
   VT_type* clone_VT() override { return VT_ptr.clone(this); }
-  utils::VTPtr<MyListenSocket, ListenSocket<MyAcceptedSocket>> VT_ptr;
+  utils::VTPtr<MyListenSocket, evio::ListenSocket<MyAcceptedSocket>> VT_ptr;
 
   MyListenSocket() : VT_ptr(this) { }
 };
@@ -120,15 +89,16 @@ class MyListenSocket : public ListenSocket<MyAcceptedSocket>
 // The type of the socket that we use to connect to our own listen socket.
 // It detects that the 'connected()' signal is received even though we
 // never write anything to the socket.
-class MySocket : public Socket
+class MySocket : public evio::Socket
 {
  public:
-  using VT_type = Socket::VT_type;
+  using VT_type = evio::Socket::VT_type;
+  #define VT_MySocket VT_evio_Socket
 
-  struct VT_impl : Socket::VT_impl
+  struct VT_impl : evio::Socket::VT_impl
   {
     // Override
-    static NAD_DECL(connected, Socket* _self, bool DEBUG_ONLY(success))
+    static NAD_DECL(connected, evio::Socket* _self, bool DEBUG_ONLY(success))
     {
       MySocket* self = static_cast<MySocket*>(_self);
       Dout(dc::notice, (success ? "*** CONNECTED ***" : "*** FAILED TO CONNECT ***"));
@@ -139,26 +109,9 @@ class MySocket : public Socket
       NAD_CALL(self->close);
     }
 
-    static constexpr VT_type VT{
-      /*Socket*/
-        /*InputDevice*/
-      { nullptr,
-        read_from_fd,
-        hup,
-        exceptional,
-        read_returned_zero,
-        read_error,
-        data_received },
-        /*OutputDevice*/
-      { nullptr,
-        write_to_fd,
-        write_error },
-      connected,
-      disconnected
-    };
+    static constexpr VT_type VT VT_MySocket;
   };
 
-  // Make a deep copy of VT_ptr.
   VT_type* clone_VT() override { return VT_ptr.clone(this); }
   utils::VTPtr<MySocket, Socket> VT_ptr;
 

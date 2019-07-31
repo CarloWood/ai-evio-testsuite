@@ -15,8 +15,6 @@ using evio::InputBuffer;
 using evio::OutputBuffer;
 using evio::MsgBlock;
 using evio::OutputStream;
-using evio::Socket;
-using evio::ListenSocket;
 using evio::SocketAddress;
 using evio::GetThread;
 template<threadpool::Timer::time_point::rep count, typename Unit> using Interval = threadpool::Interval<count, Unit>;
@@ -35,15 +33,16 @@ class MyDecoder : public InputDecoder
 
 using MyAcceptedSocket = evio::AcceptedSocket<MyDecoder, OutputStream>;
 
-class MyListenSocket : public ListenSocket<MyAcceptedSocket>
+class MyListenSocket : public evio::ListenSocket<MyAcceptedSocket>
 {
  public:
-  using VT_type = ListenSocket<MyAcceptedSocket>::VT_type;
+  using VT_type = evio::ListenSocket<MyAcceptedSocket>::VT_type;
+  #define VT_MyListenSocket VT_evio_ListenSocket
 
-  struct VT_impl : ListenSocket<MyAcceptedSocket>::VT_impl
+  struct VT_impl : evio::ListenSocket<MyAcceptedSocket>::VT_impl
   {
     // Called when a new connection is accepted.
-    static void new_connection(ListenSocket* UNUSED_ARG(_self), accepted_socket_type& accepted_socket)
+    static void new_connection(evio::ListenSocket<MyAcceptedSocket>* UNUSED_ARG(_self), accepted_socket_type& accepted_socket)
     {
       Dout(dc::notice, "New connection to listen socket was accepted. Sending 10000 bytes of data.");
       // Write 10 kbyte of data.
@@ -51,31 +50,17 @@ class MyListenSocket : public ListenSocket<MyAcceptedSocket>
         accepted_socket() << "START012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789END." << std::endl;
     }
 
-    // Virtual table of ListenSocket.
-    static constexpr VT_type VT{
-      /*ListenSocket*/
-        /*ListenSocketDevice*/
-      {   /*InputDevice*/
-        { nullptr,
-          read_from_fd,
-          hup,
-          exceptional,
-          read_returned_zero,
-          read_error,
-          data_received },
-        maybe_out_of_fds,
-        spawn_accepted },
-      new_connection       // Overridden
-    };
+    // Virtual table of MyListenSocket.
+    static constexpr VT_type VT VT_MyListenSocket;
   };
 
   VT_type* clone_VT() override { return VT_ptr.clone(this); }
-  utils::VTPtr<MyListenSocket, ListenSocket<MyAcceptedSocket>> VT_ptr;
+  utils::VTPtr<MyListenSocket, evio::ListenSocket<MyAcceptedSocket>> VT_ptr;
 
   MyListenSocket() : VT_ptr(this) { }
 };
 
-class BurstSocket : public Socket
+class BurstSocket : public evio::Socket
 {
   private:
 //   MyDecoder m_input;

@@ -7,6 +7,7 @@ class NoEpollInputDevice : public evio::InputDevice
 {
  public:
   using VT_type = evio::InputDevice::VT_type;
+  #define VT_NoEpollInputDevice VT_evio_InputDevice
 
   struct VT_impl : evio::InputDevice::VT_impl
   {
@@ -14,16 +15,12 @@ class NoEpollInputDevice : public evio::InputDevice
     {
     }
 
-    static constexpr VT_type VT{
-      /*InputDevice*/
-      nullptr,
-      read_from_fd,             // override
-      hup,
-      exceptional,
-      nullptr,
-      nullptr,
-      nullptr,
-    };
+    // These should never be called.
+    static constexpr std::nullptr_t read_returned_zero = nullptr;
+    static constexpr std::nullptr_t read_error = nullptr;
+    static constexpr std::nullptr_t data_received = nullptr;
+
+    static constexpr VT_type VT VT_NoEpollInputDevice;
   };
 
   VT_type* clone_VT() override { return VT_ptr.clone(this); }
@@ -36,6 +33,7 @@ class NoEpollOutputDevice : public evio::OutputDevice
 {
  public:
   using VT_type = evio::OutputDevice::VT_type;
+  #define VT_NoEpollOutputDevice VT_evio_OutputDevice
 
   struct VT_impl : evio::OutputDevice::VT_impl
   {
@@ -43,12 +41,10 @@ class NoEpollOutputDevice : public evio::OutputDevice
     {
     }
 
-    static constexpr VT_type VT{
-      /*OutputDevice*/
-      nullptr,
-      write_to_fd,              // override
-      nullptr
-    };
+    // These should never be called.
+    static constexpr std::nullptr_t write_error = nullptr;
+
+    static constexpr VT_type VT VT_NoEpollOutputDevice;
   };
 
   VT_type* clone_VT() override { return VT_ptr.clone(this); }

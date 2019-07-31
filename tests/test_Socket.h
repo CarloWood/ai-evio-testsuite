@@ -38,6 +38,7 @@ class MyListenSocket : public evio::ListenSocket<MyAcceptedSocket>
 {
  public:
   using VT_type = evio::ListenSocket<MyAcceptedSocket>::VT_type;
+  #define VT_MyListenSocket VT_evio_ListenSocket
 
   struct VT_impl : evio::ListenSocket<MyAcceptedSocket>::VT_impl
   {
@@ -54,26 +55,10 @@ class MyListenSocket : public evio::ListenSocket<MyAcceptedSocket>
     }
 
     // Virtual table of MyListenSocket.
-    static constexpr VT_type VT{
-      /*ListenSocket*/
-        /*ListenSocketDevice*/
-      {   /*InputDevice*/
-        { nullptr,
-          read_from_fd,
-          hup,
-          exceptional,
-          read_returned_zero,
-          read_error,
-          data_received },
-        maybe_out_of_fds,
-        spawn_accepted },
-      new_connection            // Overridden
-    };
+    static constexpr VT_type VT VT_MyListenSocket;
   };
 
-  // Make a deep copy of VT_ptr.
   VT_type* clone_VT() override { return VT_ptr.clone(this); }
-
   utils::VTPtr<MyListenSocket, evio::ListenSocket<MyAcceptedSocket>> VT_ptr;
 
   MyListenSocket() : VT_ptr(this) { }
@@ -83,12 +68,13 @@ class MyListenSocket : public evio::ListenSocket<MyAcceptedSocket>
 class MyClientSocket : public evio::Socket
 {
  public:
-  using VT_type = Socket::VT_type;
+  using VT_type = evio::Socket::VT_type;
+  #define VT_MyClientSocket VT_evio_Socket
 
-  struct VT_impl : Socket::VT_impl
+  struct VT_impl : evio::Socket::VT_impl
   {
     // Override
-    static NAD_DECL_UNUSED_ARG(connected, Socket* _self, bool DEBUG_ONLY(success))
+    static NAD_DECL_UNUSED_ARG(connected, evio::Socket* _self, bool DEBUG_ONLY(success))
     {
       MyClientSocket* self = static_cast<MyClientSocket*>(_self);
       Dout(dc::notice, (success ? "*** CONNECTED ***" : "*** FAILED TO CONNECT ***"));
@@ -96,29 +82,11 @@ class MyClientSocket : public evio::Socket
       self->m_connected = true;
     }
 
-    static constexpr VT_type VT{
-      /*Socket*/
-        /*InputDevice*/
-      { nullptr,
-        read_from_fd,
-        hup,
-        exceptional,
-        read_returned_zero,
-        read_error,
-        data_received },
-        /*OutputDevice*/
-      { nullptr,
-        write_to_fd,
-        write_error },
-      connected,
-      disconnected
-    };
+    static constexpr VT_type VT VT_MyClientSocket;
   };
 
-  // Make a deep copy of VT_ptr.
   VT_type* clone_VT() override { return VT_ptr.clone(this); }
-
-  utils::VTPtr<MyClientSocket, Socket> VT_ptr;
+  utils::VTPtr<MyClientSocket, evio::Socket> VT_ptr;
 
  private:
   bool m_connected;

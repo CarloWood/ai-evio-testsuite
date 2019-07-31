@@ -28,6 +28,7 @@ class Socket : public evio::InputDevice, public evio::OutputDevice
  public:
   struct VT_type : InputDevice::VT_type, OutputDevice::VT_type
   {
+    #define VT_Socket { VT_evio_InputDevice, VT_evio_OutputDevice }
   };
 
   struct VT_impl : InputDevice::VT_impl, OutputDevice::VT_impl
@@ -35,25 +36,10 @@ class Socket : public evio::InputDevice, public evio::OutputDevice
     static NAD_DECL(read_from_fd, evio::InputDevice* _self, int fd); // Read thread.
     static NAD_DECL(write_to_fd, evio::OutputDevice* _self, int fd); // Write thread.
 
-    static constexpr VT_type VT{
-      /*InputDevice*/
-    { nullptr,
-      read_from_fd,
-      hup,
-      exceptional,
-      read_returned_zero,
-      read_error,
-      data_received },
-      /*OutputDevice*/
-    { nullptr,
-      write_to_fd,
-      write_error }
-    };
+    static constexpr VT_type VT VT_Socket;
   };
 
-  // Make a deep copy of VT_ptr.
   VT_type* clone_VT() override { return VT_ptr.clone(this); }
-
   utils::VTPtr<Socket, InputDevice, OutputDevice> VT_ptr;
 
  private:
