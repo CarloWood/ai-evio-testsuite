@@ -85,9 +85,6 @@ TEST(RefCountReleaser, LeavingScopeWithoutDestruction)
 
 TEST(RefCountReleaser, DefaultConstructor)
 {
-  // Fix the testsuite when this changes.
-  assert(sizeof(evio::RefCountReleaser) == sizeof(evio::FileDescriptor*));
-
   // This basically does nothing.
   {
     evio::RefCountReleaser rcr;

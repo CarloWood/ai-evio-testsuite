@@ -71,14 +71,9 @@ struct InputDevice : public NoEpollInputDevice
 
   RefCountReleaser remove_input_device()
   {
-    RefCountReleaser nad_rcr;;
     int allow_deletion_count = 0;
     evio::InputDevice::remove_input_device(allow_deletion_count, state_t::wat(m_state));
-    if (allow_deletion_count > 0)
-      nad_rcr = this;
-    if (allow_deletion_count > 1)
-      allow_deletion(allow_deletion_count - 1);
-    return nad_rcr;;
+    return {this, allow_deletion_count};
   }
 
   void disable_input_device()
@@ -141,33 +136,21 @@ struct OutputDevice : public NoEpollOutputDevice
 
   RefCountReleaser stop_output_device()
   {
-    RefCountReleaser nad_rcr;;
     int allow_deletion_count = 0;
     evio::OutputDevice::stop_output_device(allow_deletion_count);
-    if (allow_deletion_count > 0)
-      nad_rcr = this;
-    if (allow_deletion_count > 1)
-      allow_deletion(allow_deletion_count - 1);
-    return nad_rcr;;
+    return {this, allow_deletion_count};
   }
 
   RefCountReleaser remove_output_device()
   {
-    RefCountReleaser nad_rcr;;
     int allow_deletion_count = 0;
     evio::OutputDevice::remove_output_device(allow_deletion_count);
-    if (allow_deletion_count > 0)
-      nad_rcr = this;
-    if (allow_deletion_count > 1)
-      allow_deletion(allow_deletion_count - 1);
-    return nad_rcr;;
+    return {this, allow_deletion_count};
   }
 
   RefCountReleaser flush_output_device()
   {
-    RefCountReleaser nad_rcr;;
-    nad_rcr += evio::OutputDevice::flush_output_device();
-    return nad_rcr;;
+    return evio::OutputDevice::flush_output_device();
   }
 
   void disable_output_device()
@@ -266,18 +249,16 @@ class TestIODevice : public TestIODeviceNoInit
 #endif
     if (m_input_device->is_active(evio::SingleThread()).is_momentary_true())
     {
-      RefCountReleaser nad_rcr;;
-      nad_rcr += m_input_device->close_input_device();
+      RefCountReleaser rcr = m_input_device->close_input_device();
       // is_momentary_true() here really means is_true() -- because we don't have an EventLoopThread running during this test, nor any other threads.
       // Therefore, this should always be true.
-      EXPECT_TRUE(nad_rcr); // To cancel inhibit_deletion of being added.
+      EXPECT_TRUE(rcr); // To cancel inhibit_deletion of being added.
     }
     if (m_output_device->is_active(evio::SingleThread()).is_momentary_true())
     {
-      RefCountReleaser nad_rcr;;
-      nad_rcr += m_output_device->close_output_device();
+      RefCountReleaser rcr = m_output_device->close_output_device();
       // See comment above.
-      EXPECT_TRUE(nad_rcr); // To cancel inhibit_deletion of being added.
+      EXPECT_TRUE(rcr); // To cancel inhibit_deletion of being added.
     }
     // Perform a garbage_collection().
     evio::EventLoopThread::instance().wake_up();
@@ -1078,11 +1059,11 @@ TEST_F(TestIODevice, DeviceStatesFlushingClose)
 TEST_F(TestIODevice, DeviceStatesFlushingStop)
 {
   m_output_device->start_output_device();
-  m_output_device->flush_output_device();
+  RefCountReleaser output_releaser1 = m_output_device->flush_output_device();
   CALL(test_is_Flushing(m_output_device));
-  RefCountReleaser output_releaser = m_output_device->stop_output_device();
+  RefCountReleaser output_releaser2 = m_output_device->stop_output_device();
   CALL(test_is_Closed(m_output_device));
-  EXPECT_TRUE(output_releaser);
+  EXPECT_TRUE(output_releaser2);
 }
 
 TEST_F(TestIODevice, DeviceStatesRemovedFlush)

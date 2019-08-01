@@ -32,14 +32,9 @@ class StreamBuf_OutputDevice : public NoEpollOutputDevice
 
   RefCountReleaser stop_output_device()
   {
-    RefCountReleaser nad_rcr;;
     int allow_deletion_count = 0;
     evio::OutputDevice::stop_output_device(allow_deletion_count);
-    if (allow_deletion_count > 0)
-      nad_rcr = this;
-    if (allow_deletion_count > 1)
-      allow_deletion(allow_deletion_count - 1);
-    return nad_rcr;;
+    return {this, allow_deletion_count};
   }
 
   void init(int fd)

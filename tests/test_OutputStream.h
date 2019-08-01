@@ -25,14 +25,9 @@ class MyOutputDevice : public NoEpollOutputDevice
 
   RefCountReleaser stop_output_device()
   {
-    RefCountReleaser nad_rcr;;
     int allow_deletion_count = 0;
     evio::OutputDevice::stop_output_device(allow_deletion_count);
-    if (allow_deletion_count > 0)
-      nad_rcr = this;
-    if (allow_deletion_count > 1)
-      allow_deletion(allow_deletion_count - 1);
-    return nad_rcr;;
+    return {this, allow_deletion_count};
   }
 
   void init(int fd)
@@ -116,13 +111,9 @@ TEST_F(OutputStreamFixture, create_buffer)
     output->start_output_device();
     EXPECT_TRUE(output_device->is_active(type).is_transitory_true());
 
-#if 0
     // Likewise when calling stop_output_device().
-    evio::RefCountReleaser allow_deletion = decoder.stop_output_device();
+    RefCountReleaser rcr = output_device->stop_output_device();
     EXPECT_TRUE(output_device->is_active(type).is_false());
-#else
-    output_device->stop_output_device();
-#endif
 
     // Check if the expected arguments were passed.
     evio::Protocol const protocol;
