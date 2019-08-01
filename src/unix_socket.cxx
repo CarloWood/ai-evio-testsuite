@@ -16,7 +16,7 @@ class MyDecoder : public evio::InputDecoder
   MyDecoder() : m_received(0) { }
 
  protected:
-  NAD_DECL(decode, evio::MsgBlock&& msg) override;
+  void decode(int& allow_deletion_count, evio::MsgBlock&& msg) override;
 };
 
 using MyAcceptedSocket = evio::AcceptedSocket<MyDecoder, evio::OutputStream>;
@@ -63,13 +63,13 @@ int main()
   }
 }
 
-NAD_DECL_CWDEBUG_ONLY(MyDecoder::decode, evio::MsgBlock&& CWDEBUG_ONLY(msg))
+void MyDecoder::decode(int& CWDEBUG_ONLY(allow_deletion_count), evio::MsgBlock&& CWDEBUG_ONLY(msg))
 {
   // Just print what was received.
   DoutEntering(dc::notice, "MyDecoder::decode({" << allow_deletion_count << "}, \"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
   Debug(m_received += msg.get_size());
   if (std::string_view(msg.get_start(), msg.get_size()) == "Hello world!\n")
   {
-    NAD_CALL(close_input_device);
+    close_input_device(allow_deletion_count);
   }
 }

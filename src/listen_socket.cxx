@@ -28,7 +28,7 @@ class MyDecoder : public InputDecoder
   MyDecoder() : m_received(0) { }
 
  protected:
-  NAD_DECL(decode, MsgBlock&& msg) override;
+  void decode(int& allow_deletion_count, MsgBlock&& msg) override;
 };
 
 using MyAcceptedSocket = evio::AcceptedSocket<MyDecoder, OutputStream>;
@@ -106,7 +106,7 @@ int main()
           [&timer, listen_sock]()
           {
             timer.release_callback();
-            NAD_PUBLIC_CALL(listen_sock->close);
+            listen_sock->close();
             evio::EventLoopThread::instance().bump_terminate();
           });
     }
@@ -146,7 +146,7 @@ int main()
   Dout(dc::notice, "Leaving main...");
 }
 
-NAD_DECL_CWDEBUG_ONLY(MyDecoder::decode, MsgBlock&& msg)
+void MyDecoder::decode(int& CWDEBUG_ONLY(allow_deletion_count), MsgBlock&& msg)
 {
   // Just print what was received.
   DoutEntering(dc::notice, "MyDecoder::decode({" << allow_deletion_count << "}, \"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');

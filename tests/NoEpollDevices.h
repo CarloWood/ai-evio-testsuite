@@ -11,7 +11,7 @@ class NoEpollInputDevice : public evio::InputDevice
 
   struct VT_impl : evio::InputDevice::VT_impl
   {
-    static NAD_DECL_UNUSED_ARG(read_from_fd, evio::InputDevice* UNUSED_ARG(self), int UNUSED_ARG(fd))
+    static void read_from_fd(int& UNUSED_ARG(allow_deletion_count), evio::InputDevice* UNUSED_ARG(self), int UNUSED_ARG(fd))
     {
     }
 
@@ -37,7 +37,7 @@ class NoEpollOutputDevice : public evio::OutputDevice
 
   struct VT_impl : evio::OutputDevice::VT_impl
   {
-    static NAD_DECL_UNUSED_ARG(write_to_fd, OutputDevice* UNUSED_ARG(self), int UNUSED_ARG(fd))
+    static void write_to_fd(int& UNUSED_ARG(allow_deletion_count), OutputDevice* UNUSED_ARG(self), int UNUSED_ARG(fd))
     {
     }
 

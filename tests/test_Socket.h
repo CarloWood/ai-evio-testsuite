@@ -21,7 +21,7 @@ class MyDecoder : public evio::InputDecoder // Protocol
   ~MyDecoder() { Dout(dc::notice, "~MyDecoder() [" << this << "]"); }
 
  protected:
-  NAD_DECL(decode, MsgBlock&& msg) override;
+  void decode(int& allow_deletion_count, MsgBlock&& msg) override;
 
   size_t minimum_block_size_estimate() const override { return 4096; }
 };
@@ -74,7 +74,7 @@ class MyClientSocket : public evio::Socket
   struct VT_impl : evio::Socket::VT_impl
   {
     // Override
-    static NAD_DECL_UNUSED_ARG(connected, evio::Socket* _self, bool DEBUG_ONLY(success))
+    static void connected(int& UNUSED_ARG(allow_deletion_count), evio::Socket* _self, bool DEBUG_ONLY(success))
     {
       MyClientSocket* self = static_cast<MyClientSocket*>(_self);
       Dout(dc::notice, (success ? "*** CONNECTED ***" : "*** FAILED TO CONNECT ***"));
@@ -148,7 +148,7 @@ TEST(Socket, Constructor)
   }
 }
 
-NAD_DECL(MyDecoder::decode, MsgBlock&& msg)
+void MyDecoder::decode(int& allow_deletion_count, MsgBlock&& msg)
 {
   // Just print what was received.
   DoutEntering(dc::notice, "MyDecoder::decode(\"{" << allow_deletion_count << "}, " << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
@@ -156,5 +156,5 @@ NAD_DECL(MyDecoder::decode, MsgBlock&& msg)
   Dout(dc::notice, "m_received = " << m_received);
   // Stop when the last message was received.
   if (m_received == 100 * burst_size)
-    NAD_CALL(close_input_device);
+    close_input_device(allow_deletion_count);
 }

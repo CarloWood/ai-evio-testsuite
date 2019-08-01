@@ -33,8 +33,8 @@ class Socket : public evio::InputDevice, public evio::OutputDevice
 
   struct VT_impl : InputDevice::VT_impl, OutputDevice::VT_impl
   {
-    static NAD_DECL(read_from_fd, evio::InputDevice* _self, int fd); // Read thread.
-    static NAD_DECL(write_to_fd, evio::OutputDevice* _self, int fd); // Write thread.
+    static void read_from_fd(int& allow_deletion_count, evio::InputDevice* _self, int fd); // Read thread.
+    static void write_to_fd(int& allow_deletion_count, evio::OutputDevice* _self, int fd); // Write thread.
 
     static constexpr VT_type VT VT_Socket;
   };
@@ -137,7 +137,7 @@ void Socket::connect_to_server(char const* remote_host, int remote_port)
 }
 
 // Read thread.
-NAD_DECL(Socket::VT_impl::read_from_fd, evio::InputDevice* _self, int fd)
+void Socket::VT_impl::read_from_fd(int& allow_deletion_count, evio::InputDevice* _self, int fd)
 {
   DoutEntering(dc::notice, "Socket::read_from_fd({" << allow_deletion_count << "}, " << fd << ")");
   Socket* self = static_cast<Socket*>(_self);
@@ -149,7 +149,7 @@ NAD_DECL(Socket::VT_impl::read_from_fd, evio::InputDevice* _self, int fd)
     len = ::read(fd, buf, 256);
     Dout(dc::finish|cond_error_cf(len == -1), len);
     if (len == -1)
-      NAD_CALL(self->evio::InputDevice::close);
+      self->evio::InputDevice::close(allow_deletion_count);
     Dout(dc::notice, "Read: \"" << libcwd::buf2str(buf, len) << "\".");
   }
   while (len == 256);
@@ -161,7 +161,7 @@ NAD_DECL(Socket::VT_impl::read_from_fd, evio::InputDevice* _self, int fd)
 }
 
 // Write thread.
-NAD_DECL(Socket::VT_impl::write_to_fd, evio::OutputDevice* _self, int fd)
+void Socket::VT_impl::write_to_fd(int& allow_deletion_count, evio::OutputDevice* _self, int fd)
 {
   Socket* self = static_cast<Socket*>(_self);
   DoutEntering(dc::notice, "Socket::write_to_fd({" << allow_deletion_count << "}, " << fd << ")");
@@ -174,5 +174,5 @@ NAD_DECL(Socket::VT_impl::write_to_fd, evio::OutputDevice* _self, int fd)
     Dout(dc::notice, "Wrote \"" << libcwd::buf2str(ss.str().data(), ss.str().length()) << "\".");
   }
   else
-    NAD_CALL(self->stop_output_device);
+    self->stop_output_device(allow_deletion_count);
 }

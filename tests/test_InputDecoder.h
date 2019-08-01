@@ -44,7 +44,7 @@ class MyInputDecoder : public evio::InputDecoder
  public:
   MyInputDecoder(size_t minimum_block_size = 0) : m_mbs(minimum_block_size) { }
 
-  NAD_DECL_CWDEBUG_ONLY(decode, evio::MsgBlock&& CWDEBUG_ONLY(msg)) override
+  void decode(int& CWDEBUG_ONLY(allow_deletion_count), evio::MsgBlock&& CWDEBUG_ONLY(msg)) override
   {
     DoutEntering(dc::notice, "MyInputDecoder::decode({" << allow_deletion_count << "}, \"" << libcwd::buf2str(msg.get_start(), msg.get_size()) << "\")");
   }

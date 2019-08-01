@@ -30,11 +30,16 @@ class StreamBuf_OutputDevice : public NoEpollOutputDevice
  public:
   evio::OutputBuffer* get_obuffer() const { return m_obuffer; }
 
-  NAD_DECL_PUBLIC(stop_output_device)
+  RefCountReleaser stop_output_device()
   {
-    NAD_PUBLIC_BEGIN;
-    NAD_CALL_FROM_PUBLIC(evio::OutputDevice::stop_output_device);
-    NAD_PUBLIC_END;
+    RefCountReleaser nad_rcr;;
+    int allow_deletion_count = 0;
+    evio::OutputDevice::stop_output_device(allow_deletion_count);
+    if (allow_deletion_count > 0)
+      nad_rcr = this;
+    if (allow_deletion_count > 1)
+      allow_deletion(allow_deletion_count - 1);
+    return nad_rcr;;
   }
 
   void init(int fd)
@@ -335,7 +340,7 @@ class StreamBuf_InputDecoder : public evio::InputDecoder
  public:
   using evio::InputDecoder::InputDecoder;
 
-  NAD_DECL_CWDEBUG_ONLY(decode, evio::MsgBlock&& CWDEBUG_ONLY(msg)) override
+  void decode(int& CWDEBUG_ONLY(allow_deletion_count), evio::MsgBlock&& CWDEBUG_ONLY(msg)) override
   {
     DoutEntering(dc::notice, "StreamBuf_InputDecoder::decode({" << allow_deletion_count << "}, \"" << libcwd::buf2str(msg.get_start(), msg.get_size()) << "\")");
   }

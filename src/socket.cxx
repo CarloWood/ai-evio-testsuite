@@ -22,7 +22,7 @@ using evio::GetThread;
 class InputPrinter : public InputDecoder
 {
  protected:
-  NAD_DECL(decode, MsgBlock&& msg) override;
+  void decode(int& allow_deletion_count, MsgBlock&& msg) override;
 };
 
 class MySocket : public Socket
@@ -112,7 +112,7 @@ int main()
   event_loop.join();
 }
 
-NAD_DECL_CWDEBUG_ONLY(InputPrinter::decode, MsgBlock&& msg)
+void InputPrinter::decode(int& CWDEBUG_ONLY(allow_deletion_count), MsgBlock&& msg)
 {
   // Just print what was received.
   DoutEntering(dc::notice, "InputPrinter::decode({" << allow_deletion_count << "}, \"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');

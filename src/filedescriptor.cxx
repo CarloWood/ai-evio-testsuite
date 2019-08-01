@@ -19,7 +19,7 @@ class TestInputDevice : public InputDevice
 
   struct VT_impl : InputDevice::VT_impl
   {
-    static NAD_DECL(read_from_fd, InputDevice* self, int fd); // Read thread.
+    static void read_from_fd(int& allow_deletion_count, InputDevice* self, int fd); // Read thread.
 
     // Virtual table of TestInputDevice.
     static constexpr VT_type VT VT_TestInputDevice;
@@ -52,7 +52,7 @@ class TestOutputDevice : public OutputDevice
 
   struct VT_impl : OutputDevice::VT_impl
   {
-    static NAD_DECL(write_to_fd, OutputDevice* self, int fd);
+    static void write_to_fd(int& allow_deletion_count, OutputDevice* self, int fd);
 
     static constexpr VT_type VT VT_TestOutputDevice;
   };
@@ -109,7 +109,7 @@ int main()
 }
 
 // Read thread.
-NAD_DECL(TestInputDevice::VT_impl::read_from_fd, evio::InputDevice* _self, int fd)
+void TestInputDevice::VT_impl::read_from_fd(int& allow_deletion_count, evio::InputDevice* _self, int fd)
 {
   DoutEntering(dc::notice, "TestInputDevice::read_from_fd({" << allow_deletion_count << "}, " << fd << ")");
 
@@ -126,15 +126,15 @@ NAD_DECL(TestInputDevice::VT_impl::read_from_fd, evio::InputDevice* _self, int f
   {
     TestInputDevice* self = static_cast<TestInputDevice*>(_self);
     EventLoopThread::instance().stop_running(); // Terminate EventLoopThread.
-    NAD_CALL(self->close);      // Remove this object.
+    self->close(allow_deletion_count); // Remove this object.
   }
 }
 
 // Write thread.
-NAD_DECL(TestOutputDevice::VT_impl::write_to_fd, OutputDevice* _self, int fd)
+void TestOutputDevice::VT_impl::write_to_fd(int& allow_deletion_count, OutputDevice* _self, int fd)
 {
   TestOutputDevice* self = static_cast<TestOutputDevice*>(_self);
   DoutEntering(dc::notice, "TestOutputDevice::write_to_fd({" << allow_deletion_count << "}, " << fd << ")");
   [[maybe_unused]] int unused = ::write(fd, "Hello World\n", 12);
-  NAD_CALL(self->stop_output_device);
+  self->stop_output_device(allow_deletion_count);
 }

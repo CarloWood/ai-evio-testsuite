@@ -46,7 +46,7 @@ struct InputDevice : public NoEpollInputDevice
 
   struct VT_impl : evio::InputDevice::VT_impl
   {
-    static NAD_DECL_UNUSED_ARG(read_from_fd, evio::InputDevice* UNUSED_ARG(self), int UNUSED_ARG(fd)) { } // override
+    static void read_from_fd(int& UNUSED_ARG(allow_deletion_count), evio::InputDevice* UNUSED_ARG(self), int UNUSED_ARG(fd)) { } // override
 
     // Virtual table of ListenSocketDevice.
     static constexpr VT_type VT VT_InputDevice;
@@ -69,11 +69,16 @@ struct InputDevice : public NoEpollInputDevice
     evio::InputDevice::stop_input_device();
   }
 
-  NAD_DECL_PUBLIC(remove_input_device)
+  RefCountReleaser remove_input_device()
   {
-    NAD_PUBLIC_BEGIN;
-    NAD_CALL_FROM_PUBLIC(evio::InputDevice::remove_input_device, state_t::wat(m_state));
-    NAD_PUBLIC_END;
+    RefCountReleaser nad_rcr;;
+    int allow_deletion_count = 0;
+    evio::InputDevice::remove_input_device(allow_deletion_count, state_t::wat(m_state));
+    if (allow_deletion_count > 0)
+      nad_rcr = this;
+    if (allow_deletion_count > 1)
+      allow_deletion(allow_deletion_count - 1);
+    return nad_rcr;;
   }
 
   void disable_input_device()
@@ -117,7 +122,7 @@ struct OutputDevice : public NoEpollOutputDevice
 
   struct VT_impl : public evio::OutputDevice::VT_impl
   {
-    static NAD_DECL_UNUSED_ARG(write_to_fd, evio::OutputDevice* UNUSED_ARG(self), int UNUSED_ARG(fd)) { } // override
+    static void write_to_fd(int& UNUSED_ARG(allow_deletion_count), evio::OutputDevice* UNUSED_ARG(self), int UNUSED_ARG(fd)) { } // override
 
     static constexpr VT_type VT VT_OutputDevice;
   };
@@ -134,25 +139,35 @@ struct OutputDevice : public NoEpollOutputDevice
     evio::OutputDevice::start_output_device();
   }
 
-  NAD_DECL_PUBLIC(stop_output_device)
+  RefCountReleaser stop_output_device()
   {
-    NAD_PUBLIC_BEGIN;
-    NAD_CALL_FROM_PUBLIC(evio::OutputDevice::stop_output_device);
-    NAD_PUBLIC_END;
+    RefCountReleaser nad_rcr;;
+    int allow_deletion_count = 0;
+    evio::OutputDevice::stop_output_device(allow_deletion_count);
+    if (allow_deletion_count > 0)
+      nad_rcr = this;
+    if (allow_deletion_count > 1)
+      allow_deletion(allow_deletion_count - 1);
+    return nad_rcr;;
   }
 
-  NAD_DECL_PUBLIC(remove_output_device)
+  RefCountReleaser remove_output_device()
   {
-    NAD_PUBLIC_BEGIN;
-    NAD_CALL_FROM_PUBLIC(evio::OutputDevice::remove_output_device);
-    NAD_PUBLIC_END;
+    RefCountReleaser nad_rcr;;
+    int allow_deletion_count = 0;
+    evio::OutputDevice::remove_output_device(allow_deletion_count);
+    if (allow_deletion_count > 0)
+      nad_rcr = this;
+    if (allow_deletion_count > 1)
+      allow_deletion(allow_deletion_count - 1);
+    return nad_rcr;;
   }
 
-  NAD_DECL_PUBLIC(flush_output_device)
+  RefCountReleaser flush_output_device()
   {
-    NAD_PUBLIC_BEGIN;
-    NAD_CALL_PUBLIC(evio::OutputDevice::flush_output_device);
-    NAD_PUBLIC_END;
+    RefCountReleaser nad_rcr;;
+    nad_rcr += evio::OutputDevice::flush_output_device();
+    return nad_rcr;;
   }
 
   void disable_output_device()
@@ -251,20 +266,18 @@ class TestIODevice : public TestIODeviceNoInit
 #endif
     if (m_input_device->is_active(evio::SingleThread()).is_momentary_true())
     {
-      NAD_PUBLIC_BEGIN;
-      NAD_CALL_PUBLIC(m_input_device->close_input_device);
+      RefCountReleaser nad_rcr;;
+      nad_rcr += m_input_device->close_input_device();
       // is_momentary_true() here really means is_true() -- because we don't have an EventLoopThread running during this test, nor any other threads.
       // Therefore, this should always be true.
       EXPECT_TRUE(nad_rcr); // To cancel inhibit_deletion of being added.
-      // No NAD_PUBLIC_END (immediately call allow_deletion()).
     }
     if (m_output_device->is_active(evio::SingleThread()).is_momentary_true())
     {
-      NAD_PUBLIC_BEGIN;
-      NAD_CALL_PUBLIC(m_output_device->close_output_device);
+      RefCountReleaser nad_rcr;;
+      nad_rcr += m_output_device->close_output_device();
       // See comment above.
       EXPECT_TRUE(nad_rcr); // To cancel inhibit_deletion of being added.
-      // No NAD_PUBLIC_END (immediately call allow_deletion()).
     }
     // Perform a garbage_collection().
     evio::EventLoopThread::instance().wake_up();
@@ -574,14 +587,14 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
 
   struct VT_impl : evio::InputDevice::VT_impl, evio::OutputDevice::VT_impl
   {
-    static NAD_DECL(read_from_fd, evio::InputDevice* _self, int fd)
+    static void read_from_fd(int& allow_deletion_count, evio::InputDevice* _self, int fd)
     {
       DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::read_from_fd({" << allow_deletion_count << "}, " << (void*)_self << ", " << fd << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_read_from_fd_count++;
-      NAD_CALL(evio::InputDevice::VT_impl::read_from_fd, _self, fd);
+      evio::InputDevice::VT_impl::read_from_fd(allow_deletion_count, _self, fd);
     }
-    static NAD_DECL_CWDEBUG_ONLY(hup, InputDevice* _self, int CWDEBUG_ONLY(fd))
+    static void hup(int& CWDEBUG_ONLY(allow_deletion_count), InputDevice* _self, int CWDEBUG_ONLY(fd))
     {
       DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::hup({" << allow_deletion_count << "}, " << (void*)_self << ", " << fd << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
@@ -589,48 +602,48 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
       // Allow the writing thread to get its write error before the HUP closes the fd.
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
-    static NAD_DECL_CWDEBUG_ONLY(exceptional, InputDevice* _self, int CWDEBUG_ONLY(fd))
+    static void exceptional(int& CWDEBUG_ONLY(allow_deletion_count), InputDevice* _self, int CWDEBUG_ONLY(fd))
     {
       DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::exceptional({" << allow_deletion_count << "}, " << (void*)_self << ", " << fd << ")");
       // Suppress exceptional event.
     }
-    static NAD_DECL(read_returned_zero, evio::InputDevice* _self)
+    static void read_returned_zero(int& allow_deletion_count, evio::InputDevice* _self)
     {
       DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::read_returned_zero({" << allow_deletion_count << "}, " << (void*)_self << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_read_returned_zero_count++;
-      NAD_CALL(evio::InputDevice::VT_impl::read_returned_zero, _self);
+      evio::InputDevice::VT_impl::read_returned_zero(allow_deletion_count, _self);
     }
-    static NAD_DECL(read_error, evio::InputDevice* _self, int err)
+    static void read_error(int& allow_deletion_count, evio::InputDevice* _self, int err)
     {
       DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::read_error({" << allow_deletion_count << "}, " << (void*)_self << ", " << err << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_read_error_count++;
       self->unscrew_fd();
-      NAD_CALL(evio::InputDevice::VT_impl::read_error, _self, err);
+      evio::InputDevice::VT_impl::read_error(allow_deletion_count, _self, err);
     }
-    static NAD_DECL(data_received, evio::InputDevice* _self, char const* new_data, size_t rlen)
+    static void data_received(int& allow_deletion_count, evio::InputDevice* _self, char const* new_data, size_t rlen)
     {
       DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::data_received({" << allow_deletion_count << "}, " << (void*)_self << ", \"" <<
           libcwd::buf2str(new_data, rlen) << "\", " << rlen << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_data_received_count++;
-      NAD_CALL(evio::InputDevice::VT_impl::data_received, _self, new_data, rlen);
+      evio::InputDevice::VT_impl::data_received(allow_deletion_count, _self, new_data, rlen);
     }
-    static NAD_DECL(write_to_fd, evio::OutputDevice* _self, int fd)
+    static void write_to_fd(int& allow_deletion_count, evio::OutputDevice* _self, int fd)
     {
       DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::write_to_fd({" << allow_deletion_count << "}, " << (void*)_self << ", " << fd << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_write_to_fd_count++;
-      NAD_CALL(OutputDevice::VT_impl::write_to_fd, _self, fd);
+      OutputDevice::VT_impl::write_to_fd(allow_deletion_count, _self, fd);
     }
-    static NAD_DECL(write_error, OutputDevice* _self, int err)
+    static void write_error(int& allow_deletion_count, OutputDevice* _self, int err)
     {
       DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::write_error({" << allow_deletion_count << "}, " << _self << ", " << err << ")");
       TestSocket* self = static_cast<TestSocket*>(_self);
       self->m_write_error_count++;
       self->m_write_error_detected();
-      NAD_CALL(OutputDevice::VT_impl::write_error, _self, err);
+      OutputDevice::VT_impl::write_error(allow_deletion_count, _self, err);
     }
 
     static constexpr VT_type VT VT_TestSocket;
@@ -729,14 +742,14 @@ class TestInputDecoder : public evio::InputDecoder
   void dont_stop() { m_stop_after_one_message = false; }
 
  protected:
-  NAD_DECL(decode, evio::MsgBlock&& msg) override
+  void decode(int& allow_deletion_count, evio::MsgBlock&& msg) override
   {
     // Just print what was received.
     DoutEntering(dc::notice, timestamp() << "TestInputDecoder::decode({" << allow_deletion_count << "}, \"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
     m_received += msg.get_size();
     // Stop after receiving just one message.
     if (m_stop_after_one_message)
-      NAD_CALL(close_input_device);
+      close_input_device(allow_deletion_count);
   }
 };
 

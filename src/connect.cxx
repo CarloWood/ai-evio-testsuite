@@ -30,7 +30,7 @@ class MyDecoder : public InputDecoder
   MyDecoder() CWDEBUG_ONLY(: m_received(0)) { }
 
  protected:
-  NAD_DECL(decode, MsgBlock&& msg) override;
+  void decode(int& allow_deletion_count, MsgBlock&& msg) override;
 };
 
 // This is the type of the accepted socket when a new client connects to our listen socket.
@@ -44,11 +44,11 @@ class MyAcceptedSocket : public evio::AcceptedSocket<MyDecoder, OutputStream>
   struct VT_impl : evio::AcceptedSocket<MyDecoder, OutputStream>::VT_impl
   {
     // Override
-    static NAD_DECL(read_returned_zero, InputDevice* _self)
+    static void read_returned_zero(int& allow_deletion_count, InputDevice* _self)
     {
       Dout(dc::notice, "*** DISCONNECTED ***");
       //MyAcceptedSocket* self = static_cast<MyAcceptedSocket*>(_self);
-      NAD_CALL(evio::InputDevice::VT_impl::read_returned_zero, _self);
+      evio::InputDevice::VT_impl::read_returned_zero(allow_deletion_count, _self);
     }
 
     static constexpr VT_type VT VT_MyAcceptedSocket;
@@ -98,7 +98,7 @@ class MySocket : public evio::Socket
   struct VT_impl : evio::Socket::VT_impl
   {
     // Override
-    static NAD_DECL(connected, evio::Socket* _self, bool DEBUG_ONLY(success))
+    static void connected(int& allow_deletion_count, evio::Socket* _self, bool DEBUG_ONLY(success))
     {
       MySocket* self = static_cast<MySocket*>(_self);
       Dout(dc::notice, (success ? "*** CONNECTED ***" : "*** FAILED TO CONNECT ***"));
@@ -106,7 +106,7 @@ class MySocket : public evio::Socket
       self->m_connected = true;
       // By immediately disconnecting again we cause a connection reset by peer on the otherside,
       // which causes MyAcceptedSocket::read_returned_zero() to be called. See above.
-      NAD_CALL(self->close);
+      self->close(allow_deletion_count);
     }
 
     static constexpr VT_type VT VT_MySocket;
@@ -173,7 +173,7 @@ int main()
   Dout(dc::notice, "Leaving main...");
 }
 
-NAD_DECL_CWDEBUG_ONLY(MyDecoder::decode, MsgBlock&& CWDEBUG_ONLY(msg))
+void MyDecoder::decode(int& CWDEBUG_ONLY(allow_deletion_count), MsgBlock&& CWDEBUG_ONLY(msg))
 {
   // Just print what was received.
   DoutEntering(dc::notice, "MyDecoder::decode({" << allow_deletion_count << "}, \"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
