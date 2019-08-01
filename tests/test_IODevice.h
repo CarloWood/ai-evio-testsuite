@@ -602,10 +602,10 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
       // Allow the writing thread to get its write error before the HUP closes the fd.
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
-    static void exceptional(int& CWDEBUG_ONLY(allow_deletion_count), InputDevice* _self, int CWDEBUG_ONLY(fd))
+    static void err(int& CWDEBUG_ONLY(allow_deletion_count), InputDevice* _self, int CWDEBUG_ONLY(fd))
     {
-      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::exceptional({" << allow_deletion_count << "}, " << (void*)_self << ", " << fd << ")");
-      // Suppress exceptional event.
+      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::err({" << allow_deletion_count << "}, " << (void*)_self << ", " << fd << ")");
+      // Suppress error event.
     }
     static void read_returned_zero(int& allow_deletion_count, evio::InputDevice* _self)
     {
