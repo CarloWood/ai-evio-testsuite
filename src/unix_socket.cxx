@@ -23,6 +23,10 @@ using MyAcceptedSocket = evio::AcceptedSocket<MyDecoder, evio::OutputStream>;
 
 class MyUNIXListenSocket : public evio::ListenSocket<MyAcceptedSocket>
 {
+  void new_connection(accepted_socket_type& UNUSED_ARG(accepted_socket)) override
+  {
+    close();
+  }
 };
 
 class MyUNIXSocket : public evio::Socket
