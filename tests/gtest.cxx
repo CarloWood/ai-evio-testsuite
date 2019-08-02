@@ -12,7 +12,7 @@
 #include "test_FileDescriptor.h"
 #endif
 #include "test_IODevice.h"
-#if 0
+#if 1
 #include "test_InputDecoder.h"
 #include "test_OutputStream.h"
 #include "test_StreamBuf.h"

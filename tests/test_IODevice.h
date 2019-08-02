@@ -582,6 +582,8 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
     DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::write_error({" << allow_deletion_count << "}, " << err << ")[" << this << "]");
     m_write_error_count++;
     m_write_error_detected();
+    // Give the library time to receive the EPOLLHUP from the HtmlServer.
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
     OutputDevice::write_error(allow_deletion_count, err);
   }
 
@@ -784,14 +786,18 @@ TEST_F(IODeviceFixture, read_returned_zero)
   std::this_thread::sleep_for(std::chrono::microseconds(DEBUG_EPOLL_PWAIT_DELAY_MICROSECONDS));
 #endif
   std::this_thread::sleep_for(std::chrono::milliseconds(1));          // so that TestSocket::write_to_fd is called again to write the buffer to the socket.
+  size_t count = 5;
+  // Give application a lot of time to get to this point :/.
+  if (--count && io_device->write_to_fd_count() < 2)
+    std::this_thread::sleep_for(std::chrono::microseconds(100));
   EXPECT_EQ(io_device->write_to_fd_count(), 2);
-  std::this_thread::sleep_for(std::chrono::milliseconds(199));        // That message is sent to the http server, which closes the socket 200 ms later...
+  std::this_thread::sleep_for(std::chrono::milliseconds(198));        // That message is sent to the http server, which closes the socket 200 ms later...
 #if DEBUG_EPOLL_PWAIT_DELAY_MICROSECONDS
   std::this_thread::sleep_for(std::chrono::microseconds(DEBUG_EPOLL_PWAIT_DELAY_MICROSECONDS));
 #endif
-  // Very sometimes this is 1 because the test application stalled for 1 millisecond somewhere.
+  // Very sometimes this is 1 because the test application stalled for 2 millisecond somewhere.
   EXPECT_EQ(io_device->read_from_fd_count(), 0);                      // but not yet...
-  std::this_thread::sleep_for(std::chrono::milliseconds(2));          // but now we should have...
+  std::this_thread::sleep_for(std::chrono::milliseconds(3));          // but now we should have...
   EXPECT_EQ(io_device->read_from_fd_count(), 1);                      // causing a call to TestSocket::read_from_fd,
   EXPECT_EQ(io_device->read_returned_zero_count(), 1);                // which called read_returned_zero()
   EXPECT_EQ(io_device->data_received_count(), 0);                     // and not data_received().
@@ -852,6 +858,10 @@ TEST_F(IODeviceFixture, write_error)
   std::this_thread::sleep_for(std::chrono::microseconds(DEBUG_EPOLL_PWAIT_DELAY_MICROSECONDS));
 #endif
   std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  // Wait for all threads from the thread pool to have finished.
+  size_t wt =100;
+  while (io_device->is_busy())
+    std::this_thread::sleep_for(std::chrono::microseconds(wt *= 2));
   EXPECT_GE(io_device->write_to_fd_count(), 2);                       // One EOF at the start and then at least one for the burst until that runs into a write error.
   EXPECT_EQ(io_device->write_error_count(), 1);
   EXPECT_EQ(io_device->hup_count(), 1);                               // Probably called in parallel (while we were still writing to the socket).

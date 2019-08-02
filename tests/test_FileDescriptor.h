@@ -628,7 +628,12 @@ void OutputDeviceWithInit<started, dontclose>::test_body()
   auto fd2 = TestOutputDevice::create(started, dontclose);
   CALL(fd2->test_close_closes_output_fd(started));
 
-  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  // We have to wait till all threads from the thread pool are finished
+  // before we can be sure that the output device will be deleted properly.
+  // Wait here so TestDestruction::TearDown() won't fail.
+  size_t wt =100;
+  while (fd1->is_busy() || fd2->is_busy())
+    std::this_thread::sleep_for(std::chrono::microseconds(wt *= 2));
 }
 
 void TestOutputDevice::test_close_output_device_closes_fd(bool started)
@@ -706,6 +711,12 @@ void DisableOutputDevice<started, close>::test_body()
 {
   auto fd1 = TestOutputDevice::create(started);
   CALL(fd1->test_disable_output_device(started, close));
+  // We have to wait till all threads from the thread pool are finished
+  // before we can be sure that the output device will be deleted properly.
+  // Wait here so TestDestruction::TearDown() won't fail.
+  size_t wt =100;
+  while (fd1->is_busy())
+    std::this_thread::sleep_for(std::chrono::microseconds(wt *= 2));
 }
 
 void TestOutputDevice::test_disable_output_device(bool started, bool close)
@@ -729,9 +740,6 @@ void TestOutputDevice::test_disable_output_device(bool started, bool close)
   // This is also allowed when the device is already closed.
   RefCountReleaser rcr = close_output_device();
   EXPECT_EQ(rcr, !close);
-  // Same story, we have to wait till all threads from the thread pool are finished
-  // before we can be sure that the output device will be deleted properly.
-  std::this_thread::sleep_for(std::chrono::milliseconds(100));
 }
 
 //-----------------------------------------------------------------------------
