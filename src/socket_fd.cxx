@@ -26,27 +26,14 @@
 class Socket : public evio::InputDevice, public evio::OutputDevice
 {
  public:
-  struct VT_type : InputDevice::VT_type, OutputDevice::VT_type
-  {
-    #define VT_Socket { VT_evio_InputDevice, VT_evio_OutputDevice }
-  };
-
-  struct VT_impl : InputDevice::VT_impl, OutputDevice::VT_impl
-  {
-    static void read_from_fd(int& allow_deletion_count, evio::InputDevice* _self, int fd); // Read thread.
-    static void write_to_fd(int& allow_deletion_count, evio::OutputDevice* _self, int fd); // Write thread.
-
-    static constexpr VT_type VT VT_Socket;
-  };
-
-  VT_type* clone_VT() override { return VT_ptr.clone(this); }
-  utils::VTPtr<Socket, InputDevice, OutputDevice> VT_ptr;
+  void read_from_fd(int& allow_deletion_count, int fd) override;
+  void write_to_fd(int& allow_deletion_count, int fd) override;
 
  private:
   int m_request;
 
  public:
-  Socket() : VT_ptr(this), m_request(0) { }
+  Socket() : m_request(0) { }
 
   void connect_to_server(char const* remote_host, int remote_port);
 };
@@ -137,10 +124,9 @@ void Socket::connect_to_server(char const* remote_host, int remote_port)
 }
 
 // Read thread.
-void Socket::VT_impl::read_from_fd(int& allow_deletion_count, evio::InputDevice* _self, int fd)
+void Socket::read_from_fd(int& allow_deletion_count, int fd)
 {
-  DoutEntering(dc::notice, "Socket::read_from_fd({" << allow_deletion_count << "}, " << fd << ")");
-  Socket* self = static_cast<Socket*>(_self);
+  DoutEntering(dc::notice, "Socket::read_from_fd({" << allow_deletion_count << "}, " << fd << ") [" << this << "]");
   char buf[256];
   ssize_t len;
   do
@@ -149,30 +135,29 @@ void Socket::VT_impl::read_from_fd(int& allow_deletion_count, evio::InputDevice*
     len = ::read(fd, buf, 256);
     Dout(dc::finish|cond_error_cf(len == -1), len);
     if (len == -1)
-      self->evio::InputDevice::close(allow_deletion_count);
+      evio::InputDevice::close(allow_deletion_count);
     Dout(dc::notice, "Read: \"" << libcwd::buf2str(buf, len) << "\".");
   }
   while (len == 256);
   if (strncmp(buf + len - 17, "#5</body></html>\n", 17) == 0)
   {
-    self->stop_input_device();
+    stop_input_device();
     evio::EventLoopThread::instance().stop_running();
   }
 }
 
 // Write thread.
-void Socket::VT_impl::write_to_fd(int& allow_deletion_count, evio::OutputDevice* _self, int fd)
+void Socket::write_to_fd(int& allow_deletion_count, int fd)
 {
-  Socket* self = static_cast<Socket*>(_self);
-  DoutEntering(dc::notice, "Socket::write_to_fd({" << allow_deletion_count << "}, " << fd << ")");
-  if (self->m_request < 6)
+  DoutEntering(dc::notice, "Socket::write_to_fd({" << allow_deletion_count << "}, " << fd << ") [" << this << "]");
+  if (m_request < 6)
   {
     std::stringstream ss;
-    ss << "GET / HTTP/1.1\r\nHost: localhost:9001\r\nAccept: */*\r\nX-Request: " << self->m_request << "\r\nX-Sleep: " << (200 * self->m_request) << "\r\n\r\n";
-    ++self->m_request;
+    ss << "GET / HTTP/1.1\r\nHost: localhost:9001\r\nAccept: */*\r\nX-Request: " << m_request << "\r\nX-Sleep: " << (200 * m_request) << "\r\n\r\n";
+    ++m_request;
     [[maybe_unused]] int unused = ::write(fd, ss.str().data(), ss.str().length());
     Dout(dc::notice, "Wrote \"" << libcwd::buf2str(ss.str().data(), ss.str().length()) << "\".");
   }
   else
-    self->stop_output_device(allow_deletion_count);
+    stop_output_device(allow_deletion_count);
 }

@@ -37,62 +37,35 @@ using MyAcceptedSocket = evio::AcceptedSocket<MyDecoder, MyOutputStream4096>;
 class MyListenSocket : public evio::ListenSocket<MyAcceptedSocket>
 {
  public:
-  using VT_type = evio::ListenSocket<MyAcceptedSocket>::VT_type;
-  #define VT_MyListenSocket VT_evio_ListenSocket
-
-  struct VT_impl : evio::ListenSocket<MyAcceptedSocket>::VT_impl
+  void new_connection(accepted_socket_type& accepted_socket) override
   {
-    // Override
-    static void new_connection(ListenSocket* self, accepted_socket_type& accepted_socket)
-    {
-      Dout(dc::notice, "New connection to listen socket was accepted. Sending " << (100 * burst_size) << " of data.");
-      // Write 10 Mbyte of data.
-      for (size_t n = 0; n < burst_size; ++n)
-        accepted_socket() << "START012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789END.\n";
-      accepted_socket() << std::flush;
-      accepted_socket.flush_output_device();
-      self->close();
-    }
-
-    // Virtual table of MyListenSocket.
-    static constexpr VT_type VT VT_MyListenSocket;
-  };
-
-  VT_type* clone_VT() override { return VT_ptr.clone(this); }
-  utils::VTPtr<MyListenSocket, evio::ListenSocket<MyAcceptedSocket>> VT_ptr;
-
-  MyListenSocket() : VT_ptr(this) { }
+    Dout(dc::notice, "New connection to listen socket was accepted. Sending " << (100 * burst_size) << " of data.");
+    // Write 10 Mbyte of data.
+    for (size_t n = 0; n < burst_size; ++n)
+      accepted_socket() << "START012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789END.\n";
+    accepted_socket() << std::flush;
+    accepted_socket.flush_output_device();
+    close();
+  }
+  MyListenSocket() = default;
   ~MyListenSocket() { Dout(dc::notice, "~MyListenSocket() [" << this << "]"); }
 };
 
 class MyClientSocket : public evio::Socket
 {
  public:
-  using VT_type = evio::Socket::VT_type;
-  #define VT_MyClientSocket VT_evio_Socket
-
-  struct VT_impl : evio::Socket::VT_impl
+  void connected(int& UNUSED_ARG(allow_deletion_count), bool DEBUG_ONLY(success)) override
   {
-    // Override
-    static void connected(int& UNUSED_ARG(allow_deletion_count), evio::Socket* _self, bool DEBUG_ONLY(success))
-    {
-      MyClientSocket* self = static_cast<MyClientSocket*>(_self);
-      Dout(dc::notice, (success ? "*** CONNECTED ***" : "*** FAILED TO CONNECT ***"));
-      ASSERT((self->m_connected_flags & (is_connected|is_disconnected)) == (success ? is_connected : is_disconnected));
-      self->m_connected = true;
-    }
-
-    static constexpr VT_type VT VT_MyClientSocket;
-  };
-
-  VT_type* clone_VT() override { return VT_ptr.clone(this); }
-  utils::VTPtr<MyClientSocket, evio::Socket> VT_ptr;
+    Dout(dc::notice, (success ? "*** CONNECTED ***" : "*** FAILED TO CONNECT ***"));
+    ASSERT((m_connected_flags & (is_connected|is_disconnected)) == (success ? is_connected : is_disconnected));
+    m_connected = true;
+  }
 
  private:
   bool m_connected;
 
  public:
-  MyClientSocket() : VT_ptr(this), m_connected(false) { }
+  MyClientSocket() : m_connected(false) { }
   ~MyClientSocket() { Dout(dc::notice, "~MyClientSocket() [" << this << "]"); ASSERT(m_connected); }
 };
 

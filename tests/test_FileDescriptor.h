@@ -627,6 +627,8 @@ void OutputDeviceWithInit<started, dontclose>::test_body()
 
   auto fd2 = TestOutputDevice::create(started, dontclose);
   CALL(fd2->test_close_closes_output_fd(started));
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
 }
 
 void TestOutputDevice::test_close_output_device_closes_fd(bool started)
@@ -722,11 +724,14 @@ void TestOutputDevice::test_disable_output_device(bool started, bool close)
   // Currently, calling enable_output_device() always calls start_output_device(),
   // even when there is nothing to write.
   EXPECT_EQ(get_flags().is_active_output_device(), !close);
-  // While a device is aded it will not be deleted.
+  // While a device is added it will not be deleted.
   // In order to let TestDestruction::TearDown() not fail, call close_output_device() here.
   // This is also allowed when the device is already closed.
   RefCountReleaser rcr = close_output_device();
   EXPECT_EQ(rcr, !close);
+  // Same story, we have to wait till all threads from the thread pool are finished
+  // before we can be sure that the output device will be deleted properly.
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
 }
 
 //-----------------------------------------------------------------------------

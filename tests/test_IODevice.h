@@ -41,21 +41,7 @@ std::string timestamp()
 
 struct InputDevice : public NoEpollInputDevice
 {
-  using VT_type = evio::InputDevice::VT_type;
-  #define VT_InputDevice VT_NoEpollInputDevice
-
-  struct VT_impl : evio::InputDevice::VT_impl
-  {
-    static void read_from_fd(int& UNUSED_ARG(allow_deletion_count), evio::InputDevice* UNUSED_ARG(self), int UNUSED_ARG(fd)) { } // override
-
-    // Virtual table of ListenSocketDevice.
-    static constexpr VT_type VT VT_InputDevice;
-  };
-
-  VT_type* clone_VT() override { return VT_ptr.clone(this); }
-  utils::VTPtr<InputDevice, evio::InputDevice> VT_ptr;
-
-  InputDevice() : VT_ptr(this) { }
+  void read_from_fd(int& UNUSED_ARG(allow_deletion_count), int UNUSED_ARG(fd)) override { }
 
   MyDummyDecoder m_decoder;
 
@@ -112,20 +98,7 @@ struct InputDevice : public NoEpollInputDevice
 
 struct OutputDevice : public NoEpollOutputDevice
 {
-  using VT_type = evio::OutputDevice::VT_type;
-  #define VT_OutputDevice VT_NoEpollOutputDevice
-
-  struct VT_impl : public evio::OutputDevice::VT_impl
-  {
-    static void write_to_fd(int& UNUSED_ARG(allow_deletion_count), evio::OutputDevice* UNUSED_ARG(self), int UNUSED_ARG(fd)) { } // override
-
-    static constexpr VT_type VT VT_OutputDevice;
-  };
-
-  VT_type* clone_VT() override { return VT_ptr.clone(this); }
-  utils::VTPtr<OutputDevice, evio::OutputDevice> VT_ptr;
-
-  OutputDevice() : VT_ptr(this) { }
+  void write_to_fd(int& UNUSED_ARG(allow_deletion_count), int UNUSED_ARG(fd)) override { }
 
   evio::OutputStream m_output;
 
@@ -561,83 +534,61 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
   std::atomic_int m_write_error_count;
 
  public:
-  struct VT_type : evio::InputDevice::VT_type, evio::OutputDevice::VT_type
+  void read_from_fd(int& allow_deletion_count, int fd) override
   {
-    #define VT_TestSocket { VT_evio_InputDevice, VT_evio_OutputDevice }
-  };
-
-  struct VT_impl : evio::InputDevice::VT_impl, evio::OutputDevice::VT_impl
+    DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::read_from_fd({" << allow_deletion_count << "}, " << fd << ") [" << this << "]");
+    m_read_from_fd_count++;
+    evio::InputDevice::read_from_fd(allow_deletion_count, fd);
+  }
+  void hup(int& CWDEBUG_ONLY(allow_deletion_count), int CWDEBUG_ONLY(fd)) override
   {
-    static void read_from_fd(int& allow_deletion_count, evio::InputDevice* _self, int fd)
-    {
-      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::read_from_fd({" << allow_deletion_count << "}, " << (void*)_self << ", " << fd << ")");
-      TestSocket* self = static_cast<TestSocket*>(_self);
-      self->m_read_from_fd_count++;
-      evio::InputDevice::VT_impl::read_from_fd(allow_deletion_count, _self, fd);
-    }
-    static void hup(int& CWDEBUG_ONLY(allow_deletion_count), InputDevice* _self, int CWDEBUG_ONLY(fd))
-    {
-      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::hup({" << allow_deletion_count << "}, " << (void*)_self << ", " << fd << ")");
-      TestSocket* self = static_cast<TestSocket*>(_self);
-      self->m_hup_count++;
-      // Allow the writing thread to get its write error before the HUP closes the fd.
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-    static void err(int& CWDEBUG_ONLY(allow_deletion_count), InputDevice* _self, int CWDEBUG_ONLY(fd))
-    {
-      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::err({" << allow_deletion_count << "}, " << (void*)_self << ", " << fd << ")");
-      // Suppress error event.
-    }
-    static void read_returned_zero(int& allow_deletion_count, evio::InputDevice* _self)
-    {
-      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::read_returned_zero({" << allow_deletion_count << "}, " << (void*)_self << ")");
-      TestSocket* self = static_cast<TestSocket*>(_self);
-      self->m_read_returned_zero_count++;
-      evio::InputDevice::VT_impl::read_returned_zero(allow_deletion_count, _self);
-    }
-    static void read_error(int& allow_deletion_count, evio::InputDevice* _self, int err)
-    {
-      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::read_error({" << allow_deletion_count << "}, " << (void*)_self << ", " << err << ")");
-      TestSocket* self = static_cast<TestSocket*>(_self);
-      self->m_read_error_count++;
-      self->unscrew_fd();
-      evio::InputDevice::VT_impl::read_error(allow_deletion_count, _self, err);
-    }
-    static void data_received(int& allow_deletion_count, evio::InputDevice* _self, char const* new_data, size_t rlen)
-    {
-      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::data_received({" << allow_deletion_count << "}, " << (void*)_self << ", \"" <<
-          libcwd::buf2str(new_data, rlen) << "\", " << rlen << ")");
-      TestSocket* self = static_cast<TestSocket*>(_self);
-      self->m_data_received_count++;
-      evio::InputDevice::VT_impl::data_received(allow_deletion_count, _self, new_data, rlen);
-    }
-    static void write_to_fd(int& allow_deletion_count, evio::OutputDevice* _self, int fd)
-    {
-      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::write_to_fd({" << allow_deletion_count << "}, " << (void*)_self << ", " << fd << ")");
-      TestSocket* self = static_cast<TestSocket*>(_self);
-      self->m_write_to_fd_count++;
-      OutputDevice::VT_impl::write_to_fd(allow_deletion_count, _self, fd);
-    }
-    static void write_error(int& allow_deletion_count, OutputDevice* _self, int err)
-    {
-      DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::write_error({" << allow_deletion_count << "}, " << _self << ", " << err << ")");
-      TestSocket* self = static_cast<TestSocket*>(_self);
-      self->m_write_error_count++;
-      self->m_write_error_detected();
-      OutputDevice::VT_impl::write_error(allow_deletion_count, _self, err);
-    }
-
-    static constexpr VT_type VT VT_TestSocket;
-  };
-
-  // These two lines must be in THIS order (clone_VT first)!
-  VT_type* clone_VT() override { return VT_ptr.clone(this); }
-  utils::VTPtr<TestSocket, evio::InputDevice, evio::OutputDevice> VT_ptr;
+    DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::hup({" << allow_deletion_count << "}, " << fd << ") [" << this << "]");
+    m_hup_count++;
+    // Allow the writing thread to get its write error before the HUP closes the fd.
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+  void err(int& CWDEBUG_ONLY(allow_deletion_count), int CWDEBUG_ONLY(fd)) override
+  {
+    DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::err({" << allow_deletion_count << "}, " << ", " << fd << ")");
+    // Suppress error event.
+  }
+  void read_returned_zero(int& allow_deletion_count) override
+  {
+    DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::read_returned_zero({" << allow_deletion_count << "}) [" << this << "]");
+    m_read_returned_zero_count++;
+    evio::InputDevice::read_returned_zero(allow_deletion_count);
+  }
+  void read_error(int& allow_deletion_count, int err) override
+  {
+    DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::read_error({" << allow_deletion_count << "}, " << err << ") [" << this << "]");
+    m_read_error_count++;
+    unscrew_fd();
+    evio::InputDevice::read_error(allow_deletion_count, err);
+  }
+  void data_received(int& allow_deletion_count, char const* new_data, size_t rlen) override
+  {
+    DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::data_received({" << allow_deletion_count << "}, \"" << libcwd::buf2str(new_data, rlen) << "\", " << rlen << ")[" << this << "]");
+    m_data_received_count++;
+    evio::InputDevice::data_received(allow_deletion_count, new_data, rlen);
+  }
+  void write_to_fd(int& allow_deletion_count, int fd) override
+  {
+    DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::write_to_fd({" << allow_deletion_count << "}, " << fd << ") [" << this << "]");
+    m_write_to_fd_count++;
+    OutputDevice::write_to_fd(allow_deletion_count, fd);
+  }
+  void write_error(int& allow_deletion_count, int err) override
+  {
+    DoutEntering(dc::notice|flush_cf, timestamp() << "TestSocket::write_error({" << allow_deletion_count << "}, " << err << ")[" << this << "]");
+    m_write_error_count++;
+    m_write_error_detected();
+    OutputDevice::write_error(allow_deletion_count, err);
+  }
 
  public:
   TestSocket() : m_socket_fd(-1), m_write_to_fd_count(0), m_read_from_fd_count(0), m_hup_count(0), m_read_returned_zero_count(0),
-                 m_read_error_count(0), m_data_received_count(0), m_write_error_count(0),
-                 VT_ptr(this) { DoutEntering(dc::evio, "TestSocket::TestSocket() [" << this << "]"); }
+                 m_read_error_count(0), m_data_received_count(0), m_write_error_count(0)
+                 { DoutEntering(dc::evio, "TestSocket::TestSocket() [" << this << "]"); }
 
   ~TestSocket()
   {

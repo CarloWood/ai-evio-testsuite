@@ -14,21 +14,7 @@ using namespace evio;
 class TestInputDevice : public InputDevice
 {
  public:
-  using VT_type = InputDevice::VT_type;
-  #define VT_TestInputDevice VT_evio_InputDevice
-
-  struct VT_impl : InputDevice::VT_impl
-  {
-    static void read_from_fd(int& allow_deletion_count, InputDevice* self, int fd); // Read thread.
-
-    // Virtual table of TestInputDevice.
-    static constexpr VT_type VT VT_TestInputDevice;
-  };
-
-  VT_type* clone_VT() override { return VT_ptr.clone(this); }
-  utils::VTPtr<TestInputDevice, InputDevice> VT_ptr;
-
-  TestInputDevice() : VT_ptr(this) { }
+  void read_from_fd(int& allow_deletion_count, int fd) override;
 
  public:
   void init(int fd)
@@ -47,24 +33,9 @@ class TestInputDevice : public InputDevice
 class TestOutputDevice : public OutputDevice
 {
  public:
-  using VT_type = OutputDevice::VT_type;
-  #define VT_TestOutputDevice VT_evio_OutputDevice
-
-  struct VT_impl : OutputDevice::VT_impl
-  {
-    static void write_to_fd(int& allow_deletion_count, OutputDevice* self, int fd);
-
-    static constexpr VT_type VT VT_TestOutputDevice;
-  };
-
-  // Make a deep copy of VT_ptr.
-  VT_type* clone_VT() override { return VT_ptr.clone(this); }
-
-  utils::VTPtr<TestOutputDevice, OutputDevice> VT_ptr;
+  void write_to_fd(int& allow_deletion_count, int fd) override;
 
  public:
-  TestOutputDevice() : VT_ptr(this) { }
-
   void init(int fd)
   {
     FileDescriptor::init(fd);
@@ -109,9 +80,9 @@ int main()
 }
 
 // Read thread.
-void TestInputDevice::VT_impl::read_from_fd(int& allow_deletion_count, evio::InputDevice* _self, int fd)
+void TestInputDevice::read_from_fd(int& allow_deletion_count, int fd)
 {
-  DoutEntering(dc::notice, "TestInputDevice::read_from_fd({" << allow_deletion_count << "}, " << fd << ")");
+  DoutEntering(dc::notice, "TestInputDevice::read_from_fd({" << allow_deletion_count << "}, " << fd << ") [" << this << "]");
 
   char buf[256];
   ssize_t len;
@@ -124,17 +95,15 @@ void TestInputDevice::VT_impl::read_from_fd(int& allow_deletion_count, evio::Inp
 
   if (strncmp(buf, "quit\n", 5) == 0)
   {
-    TestInputDevice* self = static_cast<TestInputDevice*>(_self);
     EventLoopThread::instance().stop_running(); // Terminate EventLoopThread.
-    self->close(allow_deletion_count); // Remove this object.
+    close(allow_deletion_count); // Remove this object.
   }
 }
 
 // Write thread.
-void TestOutputDevice::VT_impl::write_to_fd(int& allow_deletion_count, OutputDevice* _self, int fd)
+void TestOutputDevice::write_to_fd(int& allow_deletion_count, int fd)
 {
-  TestOutputDevice* self = static_cast<TestOutputDevice*>(_self);
-  DoutEntering(dc::notice, "TestOutputDevice::write_to_fd({" << allow_deletion_count << "}, " << fd << ")");
+  DoutEntering(dc::notice, "TestOutputDevice::write_to_fd({" << allow_deletion_count << "}, " << fd << ") [" << this << "]");
   [[maybe_unused]] int unused = ::write(fd, "Hello World\n", 12);
-  self->stop_output_device(allow_deletion_count);
+  stop_output_device(allow_deletion_count);
 }

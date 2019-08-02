@@ -3,7 +3,6 @@
 #include "debug.h"
 #include <boost/program_options.hpp>
 
-#if 1
 #include "test_set_XXXsockbuf.h"
 #include "test_print_hostent_on.h"
 #include "test_size_of_addr.h"
@@ -12,12 +11,13 @@
 #ifdef CWDEBUG  // Only compiles with CWDEBUG defined.
 #include "test_FileDescriptor.h"
 #endif
-#endif
 #include "test_IODevice.h"
+#if 0
 #include "test_InputDecoder.h"
 #include "test_OutputStream.h"
 #include "test_StreamBuf.h"
 #include "test_Socket.h"
+#endif
 
 using namespace boost::program_options;
 

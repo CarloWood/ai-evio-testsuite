@@ -36,28 +36,14 @@ using MyAcceptedSocket = evio::AcceptedSocket<MyDecoder, OutputStream>;
 class MyListenSocket : public evio::ListenSocket<MyAcceptedSocket>
 {
  public:
-  using VT_type = evio::ListenSocket<MyAcceptedSocket>::VT_type;
-  #define VT_MyListenSocket VT_evio_ListenSocket
-
-  struct VT_impl : evio::ListenSocket<MyAcceptedSocket>::VT_impl
+  // Called when a new connection is accepted.
+  void new_connection(accepted_socket_type& accepted_socket) override
   {
-    // Called when a new connection is accepted.
-    static void new_connection(evio::ListenSocket<MyAcceptedSocket>* UNUSED_ARG(_self), accepted_socket_type& accepted_socket)
-    {
-      Dout(dc::notice, "New connection to listen socket was accepted. Sending 10000 bytes of data.");
-      // Write 10 kbyte of data.
-      for (int n = 0; n < 100; ++n)
-        accepted_socket() << "START012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789END." << std::endl;
-    }
-
-    // Virtual table of MyListenSocket.
-    static constexpr VT_type VT VT_MyListenSocket;
-  };
-
-  VT_type* clone_VT() override { return VT_ptr.clone(this); }
-  utils::VTPtr<MyListenSocket, evio::ListenSocket<MyAcceptedSocket>> VT_ptr;
-
-  MyListenSocket() : VT_ptr(this) { }
+    Dout(dc::notice, "New connection to listen socket was accepted. Sending 10000 bytes of data.");
+    // Write 10 kbyte of data.
+    for (int n = 0; n < 100; ++n)
+      accepted_socket() << "START012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789END." << std::endl;
+  }
 };
 
 class BurstSocket : public evio::Socket

@@ -38,52 +38,23 @@ class MyDecoder : public InputDecoder
 class MyAcceptedSocket : public evio::AcceptedSocket<MyDecoder, OutputStream>
 {
  public:
-  using VT_type = evio::AcceptedSocket<MyDecoder, OutputStream>::VT_type;
-  #define VT_MyAcceptedSocket VT_evio_AcceptedSocket
-
-  struct VT_impl : evio::AcceptedSocket<MyDecoder, OutputStream>::VT_impl
+  void read_returned_zero(int& allow_deletion_count) override
   {
-    // Override
-    static void read_returned_zero(int& allow_deletion_count, InputDevice* _self)
-    {
-      Dout(dc::notice, "*** DISCONNECTED ***");
-      //MyAcceptedSocket* self = static_cast<MyAcceptedSocket*>(_self);
-      evio::InputDevice::VT_impl::read_returned_zero(allow_deletion_count, _self);
-    }
-
-    static constexpr VT_type VT VT_MyAcceptedSocket;
-  };
-
-  VT_type* clone_VT() override { return VT_ptr.clone(this); }
-  utils::VTPtr<MyAcceptedSocket, evio::AcceptedSocket<MyDecoder, OutputStream>> VT_ptr;
-
-  MyAcceptedSocket() : VT_ptr(this) { }
+    Dout(dc::notice, "*** DISCONNECTED ***");
+    evio::InputDevice::read_returned_zero(allow_deletion_count);
+  }
 };
 
 // The type of our listen socket: for each incoming connection a MyAcceptedSocket is spawned.
 class MyListenSocket : public evio::ListenSocket<MyAcceptedSocket>
 {
  public:
-  using VT_type = evio::ListenSocket<MyAcceptedSocket>::VT_type;
-  #define VT_MyListenSocket VT_evio_ListenSocket
-
-  struct VT_impl : evio::ListenSocket<MyAcceptedSocket>::VT_impl
+  // Called when a new connection is accepted.
+  void new_connection(accepted_socket_type& UNUSED_ARG(accepted_socket)) override
   {
-    // Called when a new connection is accepted.
-    static void new_connection(evio::ListenSocket<MyAcceptedSocket>* _self, accepted_socket_type& UNUSED_ARG(accepted_socket))
-    {
-      Dout(dc::notice, "New connection to listen socket was accepted.");
-      _self->close();
-    }
-
-    // Virtual table of ListenSocket.
-    static constexpr VT_type VT VT_MyListenSocket;
-  };
-
-  VT_type* clone_VT() override { return VT_ptr.clone(this); }
-  utils::VTPtr<MyListenSocket, evio::ListenSocket<MyAcceptedSocket>> VT_ptr;
-
-  MyListenSocket() : VT_ptr(this) { }
+    Dout(dc::notice, "New connection to listen socket was accepted.");
+    close();
+  }
 };
 
 // The type of the socket that we use to connect to our own listen socket.
@@ -92,30 +63,17 @@ class MyListenSocket : public evio::ListenSocket<MyAcceptedSocket>
 class MySocket : public evio::Socket
 {
  public:
-  using VT_type = evio::Socket::VT_type;
-  #define VT_MySocket VT_evio_Socket
-
-  struct VT_impl : evio::Socket::VT_impl
+  void connected(int& allow_deletion_count, bool DEBUG_ONLY(success)) override
   {
-    // Override
-    static void connected(int& allow_deletion_count, evio::Socket* _self, bool DEBUG_ONLY(success))
-    {
-      MySocket* self = static_cast<MySocket*>(_self);
-      Dout(dc::notice, (success ? "*** CONNECTED ***" : "*** FAILED TO CONNECT ***"));
-      ASSERT((self->m_connected_flags & (is_connected|is_disconnected)) == (success ? is_connected : is_disconnected));
-      self->m_connected = true;
-      // By immediately disconnecting again we cause a connection reset by peer on the otherside,
-      // which causes MyAcceptedSocket::read_returned_zero() to be called. See above.
-      self->close(allow_deletion_count);
-    }
+    Dout(dc::notice, (success ? "*** CONNECTED ***" : "*** FAILED TO CONNECT ***"));
+    ASSERT((m_connected_flags & (is_connected|is_disconnected)) == (success ? is_connected : is_disconnected));
+    m_connected = true;
+    // By immediately disconnecting again we cause a connection reset by peer on the otherside,
+    // which causes MyAcceptedSocket::read_returned_zero() to be called. See above.
+    close(allow_deletion_count);
+  }
 
-    static constexpr VT_type VT VT_MySocket;
-  };
-
-  VT_type* clone_VT() override { return VT_ptr.clone(this); }
-  utils::VTPtr<MySocket, Socket> VT_ptr;
-
-  MySocket() : VT_ptr(this), m_connected(false) { }
+  MySocket() : m_connected(false) { }
   ~MySocket() { ASSERT(m_connected); }
 
  private:
