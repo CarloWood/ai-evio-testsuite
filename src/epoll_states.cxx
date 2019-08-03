@@ -10,6 +10,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <fcntl.h>
 #include <unistd.h>
 
 std::mutex cout_mutex;
@@ -231,7 +232,7 @@ struct Epoll
     cout << ">> Epoll::add_fd_with_events(" << events_to_str(events) << ")" << endl;
     assert(!m_added);
     assert(m_current_events.events == 0);
-    m_current_events = { events|EPOLLONESHOT, { 0 } };
+    m_current_events = { events|EPOLLET, { 0 } };
     cout << "\e[32mepoll_ctl(" << m_epoll_fd << ", EPOLL_CTL_ADD, " << m_watched_fd << ", " << events_to_str(m_current_events.events) << ")\e[0m" << endl;
     epoll_ctl(m_epoll_fd, EPOLL_CTL_ADD, m_watched_fd, &m_current_events);
     m_added = true;
@@ -241,7 +242,7 @@ struct Epoll
   {
     cout << ">> Epoll::mod_fd(" << events_to_str(new_events) << ")" << endl;
     assert(m_added);
-    new_events |= EPOLLONESHOT;
+    new_events |= EPOLLET;
     assert(m_current_events.events != new_events);
     m_current_events = { new_events, { 0 } };
     cout << "\e[32mepoll_ctl(" << m_epoll_fd << ", EPOLL_CTL_MOD, " << m_watched_fd << ", " << events_to_str(m_current_events.events) << ")\e[0m" << endl;
@@ -281,7 +282,105 @@ struct Socket
   void recv(int n);
   void write(int n);
   void read(int n);
+
+  void close_send();
 };
+
+struct PipeReadEnd
+{
+  int m_pipefd[2];
+  size_t m_sent;
+  size_t m_read;
+  static char s_buffer[];
+
+  PipeReadEnd();
+
+  void send(int n);
+  void read(int n);
+
+  void close_send();
+};
+
+PipeReadEnd::PipeReadEnd() : m_sent(0), m_read(0)
+{
+  pipe2(m_pipefd, O_NONBLOCK);
+}
+
+//static
+char PipeReadEnd::s_buffer[1024 * 1024];
+
+void PipeReadEnd::send(int n)
+{
+  {
+    std::lock_guard<std::mutex> lock(cout_mutex);
+    cout << ">> PipeReadEnd::send(" << n << ")" << endl;
+  }
+  assert(n < (int)sizeof(s_buffer));
+  for (;;)
+  {
+    ssize_t ret;
+    {
+      std::lock_guard<std::mutex> lock(cout_mutex);
+      cout << "\e[32mwrite(" << m_pipefd[1] << ", buffer, " << n << ") = ";
+      ret = ::write(m_pipefd[1], s_buffer, n);
+      cout << ret << "\e[0m";
+      if (ret == -1)
+        cout << " (" << std::strerror(errno) << ')';
+      cout << endl;
+    }
+    if (ret == -1)
+    {
+      if (errno != EAGAIN)
+      {
+        perror("write");
+        assert(ret >= 0);
+      }
+      break;
+    }
+    m_sent += ret;
+    break;
+  }
+}
+
+void PipeReadEnd::read(int n)
+{
+  {
+    std::lock_guard<std::mutex> lock(cout_mutex);
+    cout << ">> PipeReadEnd::read(" << n << ")" << endl;
+  }
+  assert(n < (int)sizeof(s_buffer));
+  ssize_t ret = -1;
+  while (ret == -1)
+  {
+    std::lock_guard<std::mutex> lock(cout_mutex);
+    cout << "\e[32mread(" << m_pipefd[0] << ", buffer, " << n << ") = ";
+    ret = ::read(m_pipefd[0], s_buffer, n);
+    cout << ret << "\e[0m" << endl;
+  }
+  if (ret == 0)
+    cout << "  [EOF]" << endl;
+  else
+    m_read += ret;
+}
+
+void PipeReadEnd::close_send()
+{
+  {
+    std::lock_guard<std::mutex> lock(cout_mutex);
+    cout << ">> PipeReadEnd::close_send()" << endl;
+  }
+  ssize_t ret;
+  {
+    std::lock_guard<std::mutex> lock(cout_mutex);
+    cout << "\e[32mclose(" << m_pipefd[1] << ") = ";
+    ret = ::close(m_pipefd[1]);
+    cout << ret << "\e[0m";
+    if (ret == -1)
+      cout << " (" << std::strerror(errno) << ')';
+    cout << endl;
+  }
+  assert(ret >= 0);
+}
 
 Socket::Socket() : m_sent(0), m_received(0), m_written(0), m_read(0)
 {
@@ -351,6 +450,25 @@ void Socket::send(int n)
     m_sent += ret;
     break;
   }
+}
+
+void Socket::close_send()
+{
+  {
+    std::lock_guard<std::mutex> lock(cout_mutex);
+    cout << ">> Socket::close_send()" << endl;
+  }
+  ssize_t ret;
+  {
+    std::lock_guard<std::mutex> lock(cout_mutex);
+    cout << "\e[32mclose(" << m_accept_fd << ") = ";
+    ret = ::close(m_accept_fd);
+    cout << ret << "\e[0m";
+    if (ret == -1)
+      cout << " (" << std::strerror(errno) << ')';
+    cout << endl;
+  }
+  assert(ret >= 0);
 }
 
 void Socket::recv(int n)
@@ -523,28 +641,27 @@ void EpollThread::exit_epoll_wait()
 int main()
 {
   {
-    Socket socket;
-    Epoll ep(socket.m_client_fd);
+    PipeReadEnd pipe_read_end;
+    Epoll ep(pipe_read_end.m_pipefd[0]);
     EpollThread epoll_thread(ep);
 
-    ep.add_fd_with_events(EPOLLIN|EPOLLOUT);    // fd is writable --> EPOLLOUT
-    epoll_thread.enter_epoll_wait();            // reports EPOLLOUT
+    ep.add_fd_with_events(EPOLLIN);             // fd is readable, but no data --> no events.
 
-    epoll_thread.enter_epoll_wait();            // Blocks
-
-    socket.write(10000);                        // Writes 8196 bytes. fd is now no longer writable.
-    socket.send(100);                           // fd becomes readable --> EPOLLIN
+    pipe_read_end.send(10000);                  // Writes 8196 bytes. fd becomes readable --> EPOLLIN
+    pipe_read_end.close_send();
+    epoll_thread.enter_epoll_wait();
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
-    epoll_thread.enter_epoll_wait();            // reports EPOLLIN (not EPOLLOUT).
-    socket.write(10000);                        // Succeeds?! (no EAGAIN)
-    socket.write(10000);                        // Succeeds?! (no EAGAIN)
-    socket.recv(4095);                          // Makes fd writable again --> but no event???
-    socket.recv(2049);                          // Makes fd writable again --> but no event???
-//    socket.recv(1);                          // Makes fd writable again --> but no event???
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    socket.write(100);
+    epoll_thread.enter_epoll_wait();            // EPOLLHUP?
+    epoll_thread.enter_epoll_wait();            // EPOLLHUP?
+
+    pipe_read_end.read(2048);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+    epoll_thread.enter_epoll_wait();            // EPOLLHUP?
+    epoll_thread.enter_epoll_wait();            // EPOLLHUP?
   }
   cout << "Leaving main()." << endl;
 }
