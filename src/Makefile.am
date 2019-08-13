@@ -2,7 +2,7 @@ AM_CPPFLAGS = -iquote $(top_srcdir) -iquote $(top_srcdir)/cwds
 
 bin_PROGRAMS = sockaddr_storage arpa socket_address buffer_test filedescriptor socket_fd socket listen_socket \
 	       ofstream_data_test connect signals_test epoll_bug interface function_size epoll_states \
-	       unix_socket pipe
+	       unix_socket pipe tls_socket
 
 pipe_SOURCES = pipe.cxx
 pipe_CXXFLAGS = @LIBCWD_R_FLAGS@
@@ -11,6 +11,10 @@ pipe_LDADD = ../evio/libevio.la ../threadpool/libthreadpool.la ../threadsafe/lib
 unix_socket_SOURCES = unix_socket.cxx
 unix_socket_CXXFLAGS = @LIBCWD_R_FLAGS@
 unix_socket_LDADD = ../evio/libevio.la ../threadpool/libthreadpool.la ../threadsafe/libthreadsafe.la ../utils/libutils_r.la ../cwds/libcwds_r.la
+
+tls_socket_SOURCES = tls_socket.cxx
+tls_socket_CXXFLAGS = @LIBCWD_R_FLAGS@
+tls_socket_LDADD = @LIBEVIO_LIBS@ ../threadpool/libthreadpool.la ../threadsafe/libthreadsafe.la ../utils/libutils_r.la ../cwds/libcwds_r.la
 
 epoll_states_SOURCES = epoll_states.cxx
 epoll_states_CXXFLAGS = -pthread
