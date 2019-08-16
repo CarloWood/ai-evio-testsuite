@@ -15,6 +15,7 @@ unix_socket_LDADD = ../evio/libevio.la ../threadpool/libthreadpool.la ../threads
 tls_socket_SOURCES = tls_socket.cxx
 tls_socket_CXXFLAGS = @LIBCWD_R_FLAGS@
 tls_socket_LDADD = @LIBEVIO_LIBS@ ../threadpool/libthreadpool.la ../threadsafe/libthreadsafe.la ../utils/libutils_r.la ../cwds/libcwds_r.la
+tls_socket_DEPENDENCIES = @LIBEVIO_LIBS@ ../threadpool/libthreadpool.la ../threadsafe/libthreadsafe.la ../utils/libutils_r.la ../cwds/libcwds_r.la
 
 epoll_states_SOURCES = epoll_states.cxx
 epoll_states_CXXFLAGS = -pthread

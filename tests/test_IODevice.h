@@ -726,6 +726,8 @@ class IODeviceFixture : public EventLoopFixture<HtmlPipeLineServerFixture>
     Dout(dc::notice, "v IODeviceFixture::TearDown()");
     debug::Mark setup;
 #endif
+    Dout(dc::notice|flush_cf, "Closing io_device " << io_device.get());
+    io_device->close();
     Dout(dc::notice|flush_cf, "Removing last boost::intrusive_ptr for " << io_device.get());
     io_device.reset();
     Dout(dc::notice|flush_cf, "Removed last boost::intrusive_ptr...");
