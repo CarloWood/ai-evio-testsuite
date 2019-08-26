@@ -113,8 +113,7 @@ class OutputBufferFixture : public EventLoopFixture<testing::Test>
     EXPECT_EQ(m_buffer->buffer_empty(), actual_size == 0);
     EXPECT_EQ(m_buffer->get_data_size(), actual_size);
 
-    EXPECT_EQ(m_buffer->StreamBufConsumer::buffer_empty().is_transitory_true(), actual_size == 0);
-    EXPECT_EQ(m_buffer->StreamBufConsumer::buffer_empty().is_false(), actual_size != 0);                // If we are the consumer thread then non-empty stays non-empty.
+    EXPECT_EQ(m_buffer->buffer_empty(), actual_size == 0);
 
     // The allocated block has initially a size equal to the minimum block size.
     EXPECT_EQ(m_buffer->get_get_area_block_node()->get_size(), m_min_block_size);
@@ -122,8 +121,7 @@ class OutputBufferFixture : public EventLoopFixture<testing::Test>
     // The buffer is empty (and there is no race condition here, so the returned value is exact).
     //EXPECT_EQ(m_buffer->get_data_size_lower_bound(get_area_rat), (std::streamsize)actual_size);
 
-    EXPECT_EQ(m_buffer->StreamBufProducer::buffer_empty().is_true(), actual_size == 0);              // If we are the PutThread then empty stays empty.
-    EXPECT_EQ(m_buffer->StreamBufProducer::buffer_empty().is_transitory_false(), actual_size != 0);
+    EXPECT_EQ(m_buffer->buffer_empty(), actual_size == 0);
 
     // The buffer is empty (and there is no race condition here, so the returned value is exact).
     EXPECT_EQ(m_buffer->get_data_size_upper_bound(), actual_size);
@@ -188,16 +186,16 @@ TEST_F(OutputBufferFixture, WriteData)
   m_buffer->flush();
   // But also does not update the get area.
   EXPECT_EQ(m_buffer->buf2dev_contiguous(), 0UL);
-  // Even though buf2dev_contiguous_forced() calls underflow_a(), which calls sync_next_egptr(),
-  // m_next_egptr isn't updated until after sync_egptr() is called, which only happens after
-  // calling our pbump (the one of StreamBuf) or when calling sync().
+  // Even though buf2dev_contiguous_forced() calls underflow_a(), which calls update_get_area(),
+  // which uses m_last_ppr, m_last_pptr isn't updated until after sync_egptr() is called, which
+  // only happens after calling our pbump (the one of StreamBuf) or when calling sync().
   EXPECT_EQ(m_buffer->buf2dev_contiguous_forced(), 0UL);
 
   // Only when explicitly flushing a *stream*, this happens.
   m_output << std::flush;
-  // Now sync_egptr() was called, but sync_next_egptr() wasn't yet.
+  // Now sync_egptr() was called, but update_get_area() wasn't yet.
   EXPECT_EQ(m_buffer->buf2dev_contiguous(), 0UL);
-  // buf2dev_contiguous_forced() calls underflow_a(), which calls sync_next_egptr().
+  // buf2dev_contiguous_forced() calls underflow_a(), which calls update_get_area().
   EXPECT_EQ(m_buffer->buf2dev_contiguous_forced(), 1UL);
 
   // Writing a single character to the stream with flush.
