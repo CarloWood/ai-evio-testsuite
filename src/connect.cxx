@@ -63,7 +63,7 @@ class MyListenSocket : public evio::ListenSocket<MyAcceptedSocket>
 class MySocket : public evio::Socket
 {
  public:
-  void connected(int& allow_deletion_count, bool DEBUG_ONLY(success)) override
+  void connected(int& allow_deletion_count, bool DEBUG_ONLY(success))
   {
     Dout(dc::notice, (success ? "*** CONNECTED ***" : "*** FAILED TO CONNECT ***"));
     ASSERT((m_connected_flags & (is_connected|is_disconnected)) == (success ? is_connected : is_disconnected));
@@ -73,7 +73,11 @@ class MySocket : public evio::Socket
     close(allow_deletion_count);
   }
 
-  MySocket() : m_connected(false) { }
+  MySocket() : m_connected(false)
+  {
+    onConnected([this](int& allow_deletion_count, bool success){ connected(allow_deletion_count, success); });
+  }
+
   ~MySocket() { ASSERT(m_connected); }
 
  private:

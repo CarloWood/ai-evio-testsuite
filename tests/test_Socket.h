@@ -54,7 +54,7 @@ class MyListenSocket : public evio::ListenSocket<MyAcceptedSocket>
 class MyClientSocket : public evio::Socket
 {
  public:
-  void connected(int& UNUSED_ARG(allow_deletion_count), bool DEBUG_ONLY(success)) override
+  void connected(int& UNUSED_ARG(allow_deletion_count), bool DEBUG_ONLY(success))
   {
     Dout(dc::notice, (success ? "*** CONNECTED ***" : "*** FAILED TO CONNECT ***"));
     ASSERT((m_connected_flags & (is_connected|is_disconnected)) == (success ? is_connected : is_disconnected));
@@ -65,8 +65,17 @@ class MyClientSocket : public evio::Socket
   bool m_connected;
 
  public:
-  MyClientSocket() : m_connected(false) { }
-  ~MyClientSocket() { Dout(dc::notice, "~MyClientSocket() [" << this << "]"); ASSERT(m_connected); }
+  MyClientSocket() : m_connected(false)
+  {
+    Dout(dc::notice, "MyClientSocket() [" << this << "]");
+    onConnected([this](int& allow_deletion_count, bool success){ connected(allow_deletion_count, success); });
+  }
+
+  ~MyClientSocket()
+  {
+    Dout(dc::notice, "~MyClientSocket() [" << this << "]");
+    ASSERT(m_connected);
+  }
 };
 
 template<threadpool::Timer::time_point::rep count, typename Unit> using Interval = threadpool::Interval<count, Unit>;
