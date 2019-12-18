@@ -14,7 +14,7 @@ TEST(OutputStream, default_output_block_size_c)
   Dout(dc::notice, "Protocol::minimum_block_size() = " << protocol.minimum_block_size());
   size_t const requested_size = sizeof(evio::MemoryBlock) + protocol.minimum_block_size();
   size_t const alloc_size = utils::malloc_size(requested_size);
-  EXPECT_TRUE(utils::is_power_of_two(alloc_size + CW_MALLOC_OVERHEAD));
+  EXPECT_TRUE(utils::is_power_of_two(alloc_size + config::malloc_overhead_c));
   EXPECT_LT(alloc_size, utils::malloc_size(requested_size + 1));
 }
 
