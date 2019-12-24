@@ -63,9 +63,21 @@ target_link_libraries( interface PRIVATE ${AICXX_OBJECTS_LIST} )
 set( GENMC_H genmc_sync_egptr.h genmc_store_last_gptr.h genmc_unused_in_last_block.h genmc_get_data_size.h )
 set( GENMC_HC genmc_update_get_area.hc genmc_update_put_area.hc genmc_xsgetn_a.hc )
 
-add_custom_command( OUTPUT genmc_sync_egptr.h
-  COMMAND AWKPATH="${CMAKE_CURRENT_SOURCE_DIR}" gawk -f sync_egptr ${CMAKE_CURRENT_SOURCE_DIR}/StreamBuf.h > genmc_sync_egptr.h
-)
+foreach( h_file ${GENMC_H} )
+  string( REPLACE ".h" ".awk" awk_file ${h_file} )
+  add_custom_command( OUTPUT ${h_file}
+    COMMAND env AWKPATH="${CMAKE_CURRENT_SOURCE_DIR}" gawk -f "${CMAKE_CURRENT_SOURCE_DIR}/${awk_file}"
+        "${top_srcdir}/evio/StreamBuf.h" > ${h_file}
+  )
+endforeach()
+
+foreach( hc_file ${GENMC_HC} )
+  string( REPLACE ".hc" ".awk" awk_file ${hc_file} )
+  add_custom_command( OUTPUT ${hc_file}
+    COMMAND env AWKPATH="${CMAKE_CURRENT_SOURCE_DIR}" gawk -f "${CMAKE_CURRENT_SOURCE_DIR}/${awk_file}"
+        "${top_srcdir}/evio/StreamBuf.cxx" > ${hc_file}
+  )
+endforeach()
 
 add_custom_target( genmc
     DEPENDS genmc_buffer_reset_test.c ${GENMC_H} ${GENMC_HC}
