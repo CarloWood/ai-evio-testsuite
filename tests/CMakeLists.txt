@@ -1,5 +1,6 @@
 include( AICxxProject )
 
+find_package( Threads REQUIRED )
 find_package( Boost REQUIRED COMPONENTS program_options system )
 
 add_library( libgtest STATIC )
