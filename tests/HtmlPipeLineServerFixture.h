@@ -195,7 +195,8 @@ class tcp_connection : public boost::enable_shared_from_this<tcp_connection>
 
  private:
   tcp_connection(boost::asio::io_service& io_service, int instance) :
-    m_instance(instance), m_reply(0), m_closed(false), m_socket(io_service), m_eom("\r\n\r\n"), m_sleep(0), m_must_close(false), m_request(0) { }
+    m_io_service(io_service), m_instance(instance), m_reply(0), m_closed(false),
+    m_socket(io_service), m_eom("\r\n\r\n"), m_sleep(0), m_must_close(false), m_request(0) { }
 
   void handle_read(const boost::system::error_code& e, std::size_t bytes_transferred)
   {
@@ -289,7 +290,7 @@ class tcp_connection : public boost::enable_shared_from_this<tcp_connection>
     size = std::snprintf(buf, sizeof(buf), reply, strlen(body) + 27, m_instance, m_request, m_reply, body);
     ASSERT(size < ssizeof(buf));
     std::string reply_formatted(buf, size);
-    m_reply_queue.push_back(Reply(m_socket.get_io_service(), shared_from_this(), buf, size));
+    m_reply_queue.push_back(Reply(m_io_service, shared_from_this(), buf, size));
     Reply* rp = &m_reply_queue.back();
     if (m_request)
     {
@@ -390,6 +391,7 @@ class tcp_connection : public boost::enable_shared_from_this<tcp_connection>
   }
 
  private:
+  boost::asio::io_service& m_io_service;
   int m_instance;
   int m_reply;
   bool m_closed;
@@ -415,7 +417,7 @@ void Reply::timed_out(boost::system::error_code const& error)
 class tcp_server
 {
  public:
-  tcp_server(boost::asio::io_service& io_service) : m_acceptor(io_service, tcp::endpoint(tcp::v4(), 9001)), m_count(0)
+  tcp_server(boost::asio::io_service& io_service) : m_io_service(io_service), m_acceptor(io_service, tcp::endpoint(tcp::v4(), 9001)), m_count(0)
   {
     m_acceptor.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
     start();
@@ -435,7 +437,7 @@ class tcp_server
  private:
   void start_accept()
   {
-    tcp_connection::pointer new_connection = tcp_connection::create(m_acceptor.get_io_service(), ++m_count);
+    tcp_connection::pointer new_connection = tcp_connection::create(m_io_service, ++m_count);
     m_acceptor.async_accept(new_connection->socket(), boost::bind(&tcp_server::handle_accept, this, new_connection, boost::asio::placeholders::error));
   }
 
@@ -448,6 +450,7 @@ class tcp_server
     start_accept();
   }
 
+  boost::asio::io_service& m_io_service;
   tcp::acceptor m_acceptor;
   int m_count;
 };
