@@ -19,7 +19,7 @@ string( TOLOWER ${hg_name} lc_name )
 string( TOUPPER ${hg_name} uc_name )
 FetchContent_Declare( ${hg_name}
     GIT_REPOSITORY "http://github.com/CarloWood/gate.git"
-    GIT_TAG "9e99c6a090c8c531704965a77850a8f62be4ec99"
+    GIT_TAG "19a25f7f95aae05bbe1a7f5665dec1dc722f2905"
             # Or just use "master" to get the latest version.
 )
 # Allows a parent project to specify its own FetchContent_Declare for ${hg_name}.
@@ -38,8 +38,8 @@ endif ()
 # out (detached HEAD).
 HunterGate(
     GIT_REPOSITORY "https://github.com/CarloWood/hunter.git"
-    SHA1 "d17660f885ce27107364e51f38cca0b639f68ce1"
-    #    FILEPATH "cwm4/cmake/hunter-config.cmake"
+    SHA1 "6ba4e9dc71963fb480cbf6ce928cc73143a43944"
+    FILEPATH "cwm4/cmake/hunter-config.cmake"
         # This is relative to the CMAKE_CURRENT_SOURCE_DIR
         # (the directory containing this CMakeLists.txt).
 )
