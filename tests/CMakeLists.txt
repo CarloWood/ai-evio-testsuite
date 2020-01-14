@@ -3,7 +3,7 @@ include( AICxxProject )
 find_package( Threads REQUIRED )
 
 hunter_add_package( Boost COMPONENTS program_options system )
-find_package( Boost REQUIRED COMPONENTS program_options system )
+find_package( Boost CONFIG REQUIRED COMPONENTS program_options system )
 
 add_library( libgtest STATIC )
 
