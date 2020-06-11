@@ -15,7 +15,7 @@ add_executable( epoll_states epoll_states.cxx )
 target_link_libraries( epoll_states PRIVATE Threads::Threads )
 
 add_executable( function_size function_size.cxx )
-target_link_libraries( function_size PRIVATE PkgConfig::Libcwd_r )
+target_link_libraries( function_size PRIVATE ${libcwd_r_TARGET} )
 
 add_executable( sockaddr_storage sockaddr_storage.cxx )
 target_link_libraries( sockaddr_storage PRIVATE AICxx::cwds )
