@@ -54,6 +54,7 @@ int main()
     boost::intrusive_ptr<Socket> fdp0 = new Socket;
     fdp0->connect_to_server("localhost", 9001);
     event_loop.join();
+    fdp0->flush_output_device();
   }
   catch (AIAlert::Error const& error)
   {
@@ -136,12 +137,13 @@ void Socket::read_from_fd(int& allow_deletion_count, int fd)
     Dout(dc::finish|cond_error_cf(len == -1), len);
     if (len == -1)
       evio::InputDevice::close(allow_deletion_count);
-    Dout(dc::notice, "Read: \"" << libcwd::buf2str(buf, len) << "\".");
+    else
+      Dout(dc::notice, "Read: \"" << libcwd::buf2str(buf, len) << "\".");
   }
   while (len == 256);
-  if (strncmp(buf + len - 17, "#5</body></html>\n", 17) == 0)
+  if (len != -1 && strncmp(buf + len - 17, "#5</body></html>\n", 17) == 0)
   {
-    stop_input_device();
+    close_input_device();
     evio::EventLoopThread::instance().stop_running();
   }
 }

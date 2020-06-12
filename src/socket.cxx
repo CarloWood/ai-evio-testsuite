@@ -31,7 +31,7 @@ class MySocket : public Socket
   InputPrinter m_input_printer;
 
  public:
-  MySocket() { set_sink(m_input_printer); }
+  MySocket() { DoutEntering(dc::notice, "MySocket::MySocket()"); set_sink(m_input_printer); }
 };
 
 #ifdef CWDEBUG
@@ -103,6 +103,10 @@ int main()
                             "X-Sleep: " << (200 * request) << "\r\n"
                             "\r\n" << std::flush;
       }
+
+    // Signal that we're done writing to the sockets.
+    for (int i = 0; i < number_of_sockets; ++i)
+      socket[i]->flush_output_device();
   }
   catch (AIAlert::Error const& error)
   {
@@ -112,11 +116,12 @@ int main()
   event_loop.join();
 }
 
-void InputPrinter::decode(int& CWDEBUG_ONLY(allow_deletion_count), MsgBlock&& msg)
+void InputPrinter::decode(int& allow_deletion_count, MsgBlock&& msg)
 {
   // Just print what was received.
   DoutEntering(dc::notice, "InputPrinter::decode({" << allow_deletion_count << "}, \"" << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
   // Stop when the last message was received.
   if (msg.get_size() >= 17 && strncmp(msg.get_start() + msg.get_size() - 17, "#5</body></html>\n", 17) == 0)
-    stop_input_device();
+    // This was the last message that we're interested in receiving (and probably nothing will come after this anyway).
+    close_input_device(allow_deletion_count);
 }
