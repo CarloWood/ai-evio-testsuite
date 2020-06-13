@@ -31,7 +31,7 @@ int main()
   Debug(NAMESPACE_DEBUG::init());
 
   // Create the thread pool.
-  AIThreadPool thread_pool;
+  AIThreadPool thread_pool(1);
   // Create the event loop thread and let it handle new events through the thread pool.
   AIQueueHandle handler = thread_pool.new_queue(32);
   EventLoop event_loop(handler);
@@ -59,15 +59,24 @@ int main()
       // $ echo "data" >> blah.txt"
       //
       // and observe that "data" ends up in both files.
+      //
+      // For a clean termination (and flushing) we have the following requirements:
+      // 1) As soon are we wrote the last data to output1, call flush_output_device() on device1.
+      // 2) Call close() on device2 once we're done with the test: we just sleep 1 second while
+      //    the main loop of evio runs and then close() device2.
+      // 3) Device3 will automatically be closed once device2 is deleted.
 
       // Open a buffered output file that uses a buffer with a minimum block size of 96 bytes and that we can write to using an ostream.
       OutputStream128 output1;                                          // The std::ostream sink.
+      Dout(dc::notice, "Creating device1:");
       auto device1 = create<File>();                                    // A File device.
       device1->set_source(output1);                                     // Create a buffer that device1 will read from and output1 will write to.
       device1->open("blah.txt", std::ios_base::trunc);                  // Open and truncate the file "blah.txt".
 
       // Open an input file that reads 'persistent' from "blah.txt" and link it with an output file that writes to "blah2.txt".
+      Dout(dc::notice, "Creating device2:");
       device2 = create<PersistentInputFile>();
+      Dout(dc::notice, "Creating device3:");
       auto device3 = create<File>();
       device3->set_source(device2, 1024 - evio::block_overhead_c, 4096, 1000000);                // Create a buffer that device3 will read from and device2 will write to.
       device2->open("blah.txt", std::ios_base::in);                     // device2 reads from "blah.txt" (when new data is appended to it).
@@ -90,6 +99,10 @@ int main()
       output1.flush();  // This is just ostream::flush(). It doesn't actually flush the buffer, it tells
                         // the library that the data that was written to the buffer is now ready to be read.
 
+      // We must mark device1 as done, because below we're going to destroy EventLoop
+      // which is not allowed while there are still any devices that are not closed.
+      // This causes device1 to be closed as soon as we're done writing all data in its buffer to "blah.txt".
+      device1->flush_output_device();
       // Destruct device pointers device1 and device3 - that tests that they aren't deleted before they are finished.
     }
 
@@ -98,7 +111,7 @@ int main()
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
     // Actually get rid of device2 (it won't disappear otherwise, since it is persistent).
-    device2->close();   // This causes device2 to be closed and deleted (and therefore (soonish?) device3 to also be deleted).
+    device2->close();   // This causes device2 to be closed and deleted (and therefore device3 to also be closed and deleted (as soon as the buffer is empty)).
     // Destruct device pointer device2 too (everything has already completed here though).
   }
   catch (AIAlert::Error const& error)
