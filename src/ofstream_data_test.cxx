@@ -31,7 +31,7 @@ int main()
   Debug(NAMESPACE_DEBUG::init());
 
   // Create the thread pool.
-  AIThreadPool thread_pool(1);
+  AIThreadPool thread_pool(8);
   // Create the event loop thread and let it handle new events through the thread pool.
   AIQueueHandle handler = thread_pool.new_queue(32);
   EventLoop event_loop(handler);
