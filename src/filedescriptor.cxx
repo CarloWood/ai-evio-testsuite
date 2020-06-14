@@ -17,9 +17,14 @@ class TestInputDevice : public InputDevice
   void read_from_fd(int& allow_deletion_count, int fd) override;
 
  public:
-  void init(int fd)
+  void init(int fd, bool make_fd_non_blocking)
   {
-    FileDescriptor::init(fd);
+    FileDescriptor::init(fd, make_fd_non_blocking);
+  }
+
+  void set_dont_close()
+  {
+    state_t::wat(m_state)->m_flags.set_dont_close();
   }
 
   void start()
@@ -36,9 +41,14 @@ class TestOutputDevice : public OutputDevice
   void write_to_fd(int& allow_deletion_count, int fd) override;
 
  public:
-  void init(int fd)
+  void init(int fd, bool make_fd_non_blocking)
   {
-    FileDescriptor::init(fd);
+    FileDescriptor::init(fd, make_fd_non_blocking);
+  }
+
+  void set_dont_close()
+  {
+    state_t::wat(m_state)->m_flags.set_dont_close();
   }
 
   void start()
@@ -65,8 +75,11 @@ int main()
     auto fdp0 = evio::create<TestInputDevice>();
     auto fdp1 = evio::create<TestOutputDevice>();
 
-    fdp0->init(0);        // Standard input.
-    fdp1->init(1);        // Standard output.
+    fdp0->init(0, false);        // Standard input.
+    fdp0->set_dont_close();
+    fdp1->init(1, false);        // Standard output.
+    fdp1->set_dont_close();
+    fdp1->close_on_exit();
 
     fdp0->start();
     fdp1->start();
@@ -94,10 +107,7 @@ void TestInputDevice::read_from_fd(int& allow_deletion_count, int fd)
   while (len == 256);
 
   if (strncmp(buf, "quit\n", 5) == 0)
-  {
-    EventLoopThread::instance().stop_running(); // Terminate EventLoopThread.
-    close(allow_deletion_count); // Remove this object.
-  }
+    close(allow_deletion_count); // Remove this object; this will cause the main event loop to terminate.
 }
 
 // Write thread.

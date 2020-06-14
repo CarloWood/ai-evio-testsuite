@@ -607,7 +607,7 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
   {
     DoutEntering(dc::notice, "TestSocket::init()");
     m_socket_fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
-    FileDescriptor::init(m_socket_fd);
+    FileDescriptor::init(m_socket_fd, false);
   }
 
   void listen()
