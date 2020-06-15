@@ -59,7 +59,7 @@ int main()
     unix_socket->connect(endpoint);
 
     unix_socket_source << "Hello world!" << std::endl;
-    unix_socket->close_output_device();
+    unix_socket->flush_output_device();
 
     event_loop.join();
   }
