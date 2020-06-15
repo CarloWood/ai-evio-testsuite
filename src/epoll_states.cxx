@@ -303,7 +303,8 @@ struct PipeReadEnd
 
 PipeReadEnd::PipeReadEnd() : m_sent(0), m_read(0)
 {
-  pipe2(m_pipefd, O_NONBLOCK);
+  int ret = pipe2(m_pipefd, O_NONBLOCK);
+  cout << "\e[32m" << "pipe2([" << m_pipefd[0] << ", " << m_pipefd[1] << "], O_NONBLOCK) = " << ret << "\e[0m" << endl;
 }
 
 //static
@@ -581,6 +582,7 @@ void EpollThread::event_loop()
       {
         cout << get_name() << " \e[32mNo events!\e[0m" << endl;
         pause(thread_permuter::blocking, true);
+        timeout = 1;
       }
       else
         cout << get_name() << " \e[32mepoll_wait(" << m_ep.m_epoll_fd << ", &events, 1, -1) =\e[0m <unfinished>..." << endl;
@@ -648,12 +650,11 @@ int main()
     ep.add_fd_with_events(EPOLLIN);             // fd is readable, but no data --> no events.
 
     pipe_read_end.send(10000);                  // Writes 8196 bytes. fd becomes readable --> EPOLLIN
-    pipe_read_end.close_send();
+    pipe_read_end.close_send();                 // Close the fd --> EPOLLHUP
     epoll_thread.enter_epoll_wait();
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
-    epoll_thread.enter_epoll_wait();            // EPOLLHUP?
     epoll_thread.enter_epoll_wait();            // EPOLLHUP?
 
     pipe_read_end.read(2048);
