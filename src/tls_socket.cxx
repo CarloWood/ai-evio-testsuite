@@ -35,7 +35,8 @@ int main()
 {
   Debug(NAMESPACE_DEBUG::init());
 
-  evio::SocketAddress endpoint("172.217.20.68:443");
+  //evio::SocketAddress endpoint("172.217.20.68:443");
+  evio::SocketAddress endpoint("127.0.0.1:11111");
 
   AIThreadPool thread_pool;
   AIQueueHandle low_priority_handler = thread_pool.new_queue(16);
