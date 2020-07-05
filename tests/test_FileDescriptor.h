@@ -141,7 +141,7 @@ class TestInputDevice : public NoEpollInputDevice, public FileDescriptor
     DoutEntering(dc::notice, "TestInputDevice::create(" << start_it << ", " << dont_close << ")");
     auto device = evio::create<TestInputDevice>();
     int fd = device->m_pipefd[0];
-    device->init(fd);
+    device->fd_init(fd);
     if (dont_close)
       device->set_dont_close();
     device->tell_testsuite_fd(fd);
@@ -181,7 +181,7 @@ class TestOutputDevice : public NoEpollOutputDevice, public FileDescriptor
     DoutEntering(dc::notice, "TestOutputDevice::create(" << start_it << ", " << dont_close << ")");
     auto device = evio::create<TestOutputDevice>();
     int fd = device->m_pipefd[1];
-    device->init(fd);
+    device->fd_init(fd);
     if (dont_close)
       device->set_dont_close();
     int val = fcntl(fd, F_GETFL);

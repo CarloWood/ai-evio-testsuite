@@ -74,7 +74,7 @@ struct InputDevice : public NoEpollInputDevice
 
   void init(int fd)
   {
-    evio::InputDevice::init(fd);
+    evio::InputDevice::fd_init(fd);
     set_sink(m_decoder);
 #if 0
     // Set this to regular_file in order to avoid epoll being called (which isn't initialized).
@@ -138,7 +138,7 @@ struct OutputDevice : public NoEpollOutputDevice
 
   void init(int fd)
   {
-    evio::OutputDevice::init(fd);
+    evio::OutputDevice::fd_init(fd);
     set_source(m_output);
   }
 
@@ -607,7 +607,7 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
   {
     DoutEntering(dc::notice, "TestSocket::init()");
     m_socket_fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
-    FileDescriptor::init(m_socket_fd, false);
+    fd_init(m_socket_fd, false);
   }
 
   void listen()

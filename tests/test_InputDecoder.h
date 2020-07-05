@@ -28,7 +28,7 @@ class MyInputDevice : public NoEpollInputDevice
 
   void init(int fd)
   {
-    evio::InputDevice::init(fd);
+    evio::InputDevice::fd_init(fd);
     state_t::wat state_w(m_state);
     state_w->m_flags.set_regular_file();
   }

@@ -116,7 +116,7 @@ void Socket::connect_to_server(char const* remote_host, int remote_port)
   else
     Dout(dc::notice, "\"Connected\".");
 
-  init(fd_remote);
+  fd_init(fd_remote);
   state_t::wat state_w(m_state);
   // This class does not use input/output buffers but directly overrides read_from_fd and write_to_fd.
   // Therefore it is not necessary to call set_sink() and set_source().

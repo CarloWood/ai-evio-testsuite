@@ -19,7 +19,7 @@ class TestInputDevice : public InputDevice
  public:
   void init(int fd, bool make_fd_non_blocking)
   {
-    FileDescriptor::init(fd, make_fd_non_blocking);
+    fd_init(fd, make_fd_non_blocking);
   }
 
   void set_dont_close()
@@ -43,7 +43,7 @@ class TestOutputDevice : public OutputDevice
  public:
   void init(int fd, bool make_fd_non_blocking)
   {
-    FileDescriptor::init(fd, make_fd_non_blocking);
+    fd_init(fd, make_fd_non_blocking);
   }
 
   void set_dont_close()

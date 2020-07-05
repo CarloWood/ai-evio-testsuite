@@ -32,7 +32,7 @@ class MyOutputDevice : public NoEpollOutputDevice
 
   void init(int fd)
   {
-    evio::OutputDevice::init(fd);
+    evio::OutputDevice::fd_init(fd);
     state_t::wat state_w(m_state);
     state_w->m_flags.set_regular_file();
   }

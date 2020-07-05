@@ -39,7 +39,7 @@ class StreamBuf_OutputDevice : public NoEpollOutputDevice
 
   void init(int fd)
   {
-    evio::OutputDevice::init(fd);
+    evio::OutputDevice::fd_init(fd);
   }
 
  protected:
@@ -325,7 +325,7 @@ class StreamBuf_InputDevice : public NoEpollInputDevice
  public:
   evio::InputBuffer* get_ibuffer() const { return m_ibuffer; }
   void set_dont_close() { state_t::wat(m_state)->m_flags.set_dont_close(); }
-  void init(int fd) { evio::InputDevice::init(fd); }
+  void init(int fd) { evio::InputDevice::fd_init(fd); }
 };
 
 class StreamBuf_InputDecoder : public evio::InputDecoder
