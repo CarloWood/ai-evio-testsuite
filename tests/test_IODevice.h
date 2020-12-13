@@ -75,7 +75,7 @@ struct InputDevice : public NoEpollInputDevice
   void init(int fd)
   {
     evio::InputDevice::fd_init(fd);
-    set_sink(m_decoder);
+    set_protocol_decoder(m_decoder);
 #if 0
     // Set this to regular_file in order to avoid epoll being called (which isn't initialized).
     state_t::wat state_w(m_state);
@@ -238,7 +238,7 @@ class TestIODevice : public TestIODeviceNoInit
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
     // Make sure these are really the last references.
     EXPECT_TRUE(m_input_device->unique().is_true());
-    EXPECT_TRUE(m_output_device->unique().is_true());
+    EXPECT_TRUE(m_output_device->unique().is_true());           // Can sporadically fail - try running the test again.
     m_input_device.reset();             // Release last reference to device; this should close it.
     m_output_device.reset();            // Release last reference to device; this should close it.
     TestIODeviceNoInit::TearDown();
@@ -707,7 +707,7 @@ class IODeviceFixture : public EventLoopFixture<HtmlPipeLineServerFixture>
     EventLoopFixture<HtmlPipeLineServerFixture>::SetUp();
     io_device = evio::create<TestSocket>();
     Dout(dc::notice, "io_device = " << io_device.get());
-    io_device->set_sink(decoder);
+    io_device->set_protocol_decoder(decoder);
     io_device->set_source(output);
     CALL(io_device->connect());                                       // Because connect() calls start_input_device()...
   }
@@ -716,7 +716,7 @@ class IODeviceFixture : public EventLoopFixture<HtmlPipeLineServerFixture>
   {
     Dout(dc::notice, "IODeviceFixture::keep_alive()");
     keep_alive_device = evio::create<TestSocket>();
-    keep_alive_device->set_sink(decoder);
+    keep_alive_device->set_protocol_decoder(decoder);
     CALL(keep_alive_device->listen());
   }
 

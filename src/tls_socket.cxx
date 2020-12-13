@@ -44,7 +44,7 @@ int main()
   //evio::protocol::TLS::set_debug_level(10);
 
   MyOutputStream tls_source;
-  MyDecoder tls_sink;
+  MyDecoder decoder;
 
   try
   {
@@ -53,7 +53,7 @@ int main()
     auto tls_socket = evio::create<evio::TLSSocket>();
 
     tls_socket->set_source(tls_source);
-    tls_socket->set_sink(tls_sink);
+    tls_socket->set_protocol_decoder(decoder);
     tls_socket->connect(endpoint, "www.google.com");
 
     tls_source << "GET /\r\n";

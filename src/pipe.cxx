@@ -28,7 +28,7 @@ int main()
   AIQueueHandle low_priority_handler = thread_pool.new_queue(16);
 
   evio::OutputStream pipe_source;
-  MyDecoder pipe_sink;
+  MyDecoder decoder;
 
   try
   {
@@ -40,7 +40,7 @@ int main()
     auto pipe_read_end = pipe.take_read_end();
 
     pipe_write_end->set_source(pipe_source);
-    pipe_read_end->set_sink(pipe_sink);
+    pipe_read_end->set_protocol_decoder(decoder);
 
     pipe_source << "Hello world!" << std::endl;
     pipe_write_end->flush_output_device();

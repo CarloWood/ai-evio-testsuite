@@ -64,13 +64,13 @@ class MyDecoder : public Decoder
 class BurstSocket : public evio::Socket
 {
   private:
-   MyDecoder m_input;
+   MyDecoder m_decoder;
    OutputStream m_output;
 
   public:
    BurstSocket()
    {
-     set_sink(m_input);
+     set_protocol_decoder(m_decoder);
      set_source(m_output);
    }
 

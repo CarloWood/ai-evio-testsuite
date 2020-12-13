@@ -27,10 +27,10 @@ class InputPrinter : public Decoder
 class MySocket : public Socket
 {
  private:
-  InputPrinter m_input_printer;
+  InputPrinter m_decoder;
 
  public:
-  MySocket() { DoutEntering(dc::notice, "MySocket::MySocket()"); set_sink(m_input_printer); }
+  MySocket() { DoutEntering(dc::notice, "MySocket::MySocket()"); set_protocol_decoder(m_decoder); }
 };
 
 #ifdef CWDEBUG

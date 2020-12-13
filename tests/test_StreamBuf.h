@@ -342,7 +342,7 @@ class InputBufferFixture : public testing::Test
 {
  protected:
   boost::intrusive_ptr<StreamBuf_InputDevice> m_input_device;
-  StreamBuf_InputDecoder m_input;
+  StreamBuf_InputDecoder m_decoder;
   evio::InputBuffer* m_buffer;
   size_t m_min_block_size;
   int m_pipefd[2];
@@ -367,7 +367,7 @@ class InputBufferFixture : public testing::Test
     m_input_device = evio::create<StreamBuf_InputDevice>();
     m_input_device->init(m_pipefd[1]);           // Otherwise the device is not 'writable', which has influence on certain buffer functions (ie, sync()).
     // Create an InputBuffer for it.
-    m_input_device->set_sink(m_input, 32);
+    m_input_device->set_protocol_decoder(m_decoder, 32);
     m_buffer = m_input_device->get_ibuffer();
     // Calculate the actual minimum block size, see StreamBuf::StreamBuf.
     m_min_block_size = utils::malloc_size(m_buffer->m_minimum_block_size + sizeof(evio::MemoryBlock)) - sizeof(evio::MemoryBlock);
@@ -380,7 +380,7 @@ class InputBufferFixture : public testing::Test
     debug::Mark teardown;
 #endif
     m_input_device.reset();
-    // m_input can be reused (the call to set_sink() above will effectively reset it).
+    // m_input can be reused (the call to set_protocol_decoder() above will effectively reset it).
 
     close(m_pipefd[0]);
   }
@@ -500,7 +500,7 @@ class LinkBufferFixture : public EventLoopFixture<testing::Test>
     force_exit();
     m_input_device.reset();
     m_output_device.reset();
-    // m_input can be reused (the call to set_sink() above will effectively reset it).
+    // m_input can be reused (the call to set_protocol_decoder() above will effectively reset it).
     EventLoopFixture<testing::Test>::TearDown();
   }
 };

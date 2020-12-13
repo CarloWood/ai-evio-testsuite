@@ -120,7 +120,7 @@ class TestInputDevice : public NoEpollInputDevice, public FileDescriptor
  public:
   TestInputDevice()
   {
-    set_sink(m_decoder);
+    set_protocol_decoder(m_decoder);
     // Get some valid fd.
     if (pipe2(m_pipefd, O_CLOEXEC) == -1)
       DoutFatal(dc::core|error_cf, "pipe2(" << m_pipefd << ", O_CLOEXEC) = -1");

@@ -101,16 +101,16 @@ TEST_F(DecoderFixture, create_buffer)
     switch (number_of_args)
     {
       case 0:
-        input_device->set_sink(*decoder);
+        input_device->set_protocol_decoder(*decoder);
         break;
       case 1:
-        input_device->set_sink(*decoder);
+        input_device->set_protocol_decoder(*decoder);
         break;
       case 2:
-        input_device->set_sink(*decoder, test_args.buffer_full_watermark);
+        input_device->set_protocol_decoder(*decoder, test_args.buffer_full_watermark);
         break;
       case 3:
-        input_device->set_sink(*decoder, test_args.buffer_full_watermark, test_args.max_alloc);
+        input_device->set_protocol_decoder(*decoder, test_args.buffer_full_watermark, test_args.max_alloc);
         break;
     }
 

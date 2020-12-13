@@ -121,7 +121,7 @@ int main()
     {
       // Connect a socket to the listen socket.
       auto socket = evio::create<MySocket>();
-      socket->set_sink(decoder);
+      socket->set_protocol_decoder(decoder);
       socket->connect(listen_address);
     }
 
