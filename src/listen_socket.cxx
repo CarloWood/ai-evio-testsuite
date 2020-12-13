@@ -10,7 +10,7 @@
 #include <libcwd/buf2str.h>
 #endif
 
-using evio::InputDecoder;
+using evio::protocol::Decoder;
 using evio::InputBuffer;
 using evio::OutputBuffer;
 using evio::MsgBlock;
@@ -19,7 +19,7 @@ using evio::SocketAddress;
 using evio::GetThread;
 template<threadpool::Timer::time_point::rep count, typename Unit> using Interval = threadpool::Interval<count, Unit>;
 
-class MyAcceptedSocketDecoder : public InputDecoder
+class MyAcceptedSocketDecoder : public Decoder
 {
  private:
   size_t m_received;
@@ -49,7 +49,7 @@ class MyListenSocket : public evio::ListenSocket<MyAcceptedSocket>
   }
 };
 
-class MyDecoder : public InputDecoder
+class MyDecoder : public Decoder
 {
  private:
   size_t m_received;

@@ -1,4 +1,3 @@
-#include "evio/InputDecoder.h"
 #include "evio/StreamBuf.h"
 #include "utils/RandomStream.h"
 #include "utils/StreamHasher.h"
@@ -328,10 +327,10 @@ class StreamBuf_InputDevice : public NoEpollInputDevice
   void init(int fd) { evio::InputDevice::fd_init(fd); }
 };
 
-class StreamBuf_InputDecoder : public evio::InputDecoder
+class StreamBuf_InputDecoder : public evio::protocol::Decoder
 {
  public:
-  using evio::InputDecoder::InputDecoder;
+  using evio::protocol::Decoder::Decoder;
 
   void decode(int& CWDEBUG_ONLY(allow_deletion_count), evio::MsgBlock&& CWDEBUG_ONLY(msg)) override
   {

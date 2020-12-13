@@ -11,14 +11,14 @@ size_t constexpr burst_size = 1000000;     // Write this many times 100 bytes.
 
 using evio::MsgBlock;
 
-class MyDecoder : public evio::InputDecoder // Protocol
+class MySocketTestDecoder : public evio::protocol::Decoder
 {
  private:
   size_t m_received;
 
  public:
-  MyDecoder() : m_received(0) { }
-  ~MyDecoder() { Dout(dc::notice, "~MyDecoder() [" << this << "]"); }
+  MySocketTestDecoder() : m_received(0) { }
+  ~MySocketTestDecoder() { Dout(dc::notice, "~MySocketTestDecoder() [" << this << "]"); }
 
  protected:
   void decode(int& allow_deletion_count, MsgBlock&& msg) override;
@@ -32,7 +32,7 @@ class MyOutputStream4096 : public evio::OutputStream // Protocol
   size_t minimum_block_size_estimate() const override { return 4096; }
 };
 
-using MyAcceptedSocket = evio::AcceptedSocket<MyDecoder, MyOutputStream4096>;
+using MyAcceptedSocket = evio::AcceptedSocket<MySocketTestDecoder, MyOutputStream4096>;
 
 class MyListenSocket : public evio::ListenSocket<MyAcceptedSocket>
 {
@@ -92,9 +92,9 @@ TEST(Socket, Constructor)
 
   try
   {
-    // Construct MyDecoder before EventLoop, so that the EventLoop is destructed first!
+    // Construct MySocketTestDecoder before EventLoop, so that the EventLoop is destructed first!
     // Otherwise the decoder is destructed before we can use it (in the destructor of event_loop).
-    //MyDecoder decoder;
+    //MySocketTestDecoder decoder;
 
     // Initialize the IO event loop thread.
     evio::EventLoop event_loop(queue_handle);
@@ -130,10 +130,10 @@ TEST(Socket, Constructor)
   }
 }
 
-void MyDecoder::decode(int& allow_deletion_count, MsgBlock&& msg)
+void MySocketTestDecoder::decode(int& allow_deletion_count, MsgBlock&& msg)
 {
   // Just print what was received.
-  DoutEntering(dc::notice, "MyDecoder::decode(\"{" << allow_deletion_count << "}, " << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
+  DoutEntering(dc::notice, "MySocketTestDecoder::decode(\"{" << allow_deletion_count << "}, " << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
   m_received += msg.get_size();
   Dout(dc::notice, "m_received = " << m_received);
   // Stop when the last message was received.

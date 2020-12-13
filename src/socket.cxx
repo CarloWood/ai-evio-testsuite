@@ -3,7 +3,6 @@
 #include "sys.h"
 #include "debug.h"
 #include "evio/EventLoop.h"
-#include "evio/InputDecoder.h"
 #include "evio/Socket.h"
 #include "evio/OutputStream.h"
 #include "utils/AIAlert.h"
@@ -12,14 +11,14 @@
 #include <libcwd/buf2str.h>
 #endif
 
-using evio::InputDecoder;
+using evio::protocol::Decoder;
 using evio::MsgBlock;
 using evio::Socket;
 using evio::OutputStream;
 using evio::SocketAddress;
 using evio::GetThread;
 
-class InputPrinter : public InputDecoder
+class InputPrinter : public Decoder
 {
  protected:
   void decode(int& allow_deletion_count, MsgBlock&& msg) override;

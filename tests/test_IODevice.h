@@ -664,7 +664,7 @@ class TestSocket : public evio::InputDevice, public evio::OutputDevice
   int write_error_count() const { return m_write_error_count; }
 };
 
-class TestInputDecoder : public evio::InputDecoder
+class TestInputDecoder : public evio::protocol::Decoder
 {
  private:
   size_t m_received;

@@ -8,7 +8,7 @@
 #include <libcwd/buf2str.h>
 #endif
 
-class MyDecoder : public evio::InputDecoder
+class MyDecoder : public evio::protocol::Decoder
 {
  private:
   size_t m_received;
