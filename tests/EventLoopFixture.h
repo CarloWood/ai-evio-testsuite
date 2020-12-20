@@ -1,6 +1,7 @@
 #pragma once
 
 #include "evio/EventLoop.h"
+#include "threadpool/Timer.h"
 
 template<typename BASE = testing::Test>
 class EventLoopFixture : public BASE
@@ -12,8 +13,11 @@ class EventLoopFixture : public BASE
   AIQueueHandle m_low_priority_handler;
   bool m_clean_exit;
 
+ public:
+  threadpool::Timer* m_timer;
+
  protected:
-  void SetUp()
+  void SetUp() override
   {
 #ifdef CWDEBUG
     Dout(dc::notice, "v EventLoopFixture::SetUp()");
@@ -26,6 +30,7 @@ class EventLoopFixture : public BASE
     [[maybe_unused]] AIQueueHandle medium_priority_handler = m_thread_pool.new_queue(32);
     m_low_priority_handler = m_thread_pool.new_queue(16);
     utils::Signals::unblock(SIGPIPE);   // Unblock sigpipe for the event handler thread.
+    m_timer = new threadpool::Timer;
     m_event_loop = new evio::EventLoop(m_low_priority_handler);
     m_clean_exit = true;
   }
@@ -36,7 +41,7 @@ class EventLoopFixture : public BASE
     AIThreadPool dummy(std::move(m_thread_pool));
   }
 
-  void TearDown()
+  void TearDown() override
   {
 #ifdef CWDEBUG
     Dout(dc::notice, "v EventLoopFixture::TearDown()");
@@ -59,6 +64,7 @@ class EventLoopFixture : public BASE
     if (m_clean_exit)
       m_event_loop->join();
     delete m_event_loop;
+    delete m_timer;
     m_low_priority_handler.set_to_undefined();
     destruct_thread_pool();
     if constexpr (!std::is_same_v<BASE, testing::Test>)

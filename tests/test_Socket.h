@@ -68,7 +68,7 @@ class MyClientSocket : public evio::Socket
   MyClientSocket() : m_connected(false)
   {
     Dout(dc::notice, "MyClientSocket() [" << this << "]");
-    onConnected([this](int& allow_deletion_count, bool success){ connected(allow_deletion_count, success); });
+    on_connected([this](int& allow_deletion_count, bool success){ connected(allow_deletion_count, success); });
   }
 
   ~MyClientSocket()

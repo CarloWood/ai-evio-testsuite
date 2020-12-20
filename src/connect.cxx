@@ -75,7 +75,7 @@ class MySocket : public evio::Socket
 
   MySocket() : m_connected(false)
   {
-    onConnected([this](int& allow_deletion_count, bool success){ connected(allow_deletion_count, success); });
+    on_connected([this](int& allow_deletion_count, bool success){ connected(allow_deletion_count, success); });
   }
 
   ~MySocket() { ASSERT(m_connected); }
