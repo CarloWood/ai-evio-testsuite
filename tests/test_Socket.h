@@ -7,6 +7,8 @@
 #include <libcwd/buf2str.h>
 #endif
 
+namespace test_socket {
+
 size_t constexpr burst_size = 1000000;     // Write this many times 100 bytes.
 
 using evio::MsgBlock;
@@ -78,10 +80,25 @@ class MyClientSocket : public evio::Socket
   }
 };
 
+void MySocketTestDecoder::decode(int& allow_deletion_count, MsgBlock&& msg)
+{
+  // Just print what was received.
+  DoutEntering(dc::notice, "MySocketTestDecoder::decode(\"{" << allow_deletion_count << "}, " << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
+  m_received += msg.get_size();
+  Dout(dc::notice, "m_received = " << m_received);
+  // Stop when the last message was received.
+  if (m_received == 100 * burst_size)
+    close_input_device(allow_deletion_count);
+}
+
 template<threadpool::Timer::time_point::rep count, typename Unit> using Interval = threadpool::Interval<count, Unit>;
+
+} // namespace test_socket
 
 TEST(Socket, Constructor)
 {
+  using namespace test_socket;
+
   // Initialize signals. SIGPIPE *must* be ignored or write() won't return EPIPE when peer closed the connection.
   AISignals signals({SIGPIPE});
 
@@ -128,15 +145,4 @@ TEST(Socket, Constructor)
   {
     DoutFatal(dc::core, error.what());
   }
-}
-
-void MySocketTestDecoder::decode(int& allow_deletion_count, MsgBlock&& msg)
-{
-  // Just print what was received.
-  DoutEntering(dc::notice, "MySocketTestDecoder::decode(\"{" << allow_deletion_count << "}, " << buf2str(msg.get_start(), msg.get_size()) << "\") [" << this << ']');
-  m_received += msg.get_size();
-  Dout(dc::notice, "m_received = " << m_received);
-  // Stop when the last message was received.
-  if (m_received == 100 * burst_size)
-    close_input_device(allow_deletion_count);
 }

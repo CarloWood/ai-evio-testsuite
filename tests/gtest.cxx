@@ -3,7 +3,6 @@
 #include "debug.h"
 #include <boost/program_options.hpp>
 
-#if 0
 #include "test_set_XXXsockbuf.h"
 #include "test_print_hostent_on.h"
 #include "test_size_of_addr.h"
@@ -17,7 +16,6 @@
 #include "test_OutputStream.h"
 #include "test_StreamBuf.h"
 #include "test_Socket.h"
-#endif
 #include "test_change_specs.h"
 
 using namespace boost::program_options;
