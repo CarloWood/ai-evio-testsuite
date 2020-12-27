@@ -989,7 +989,7 @@ TEST_F(TestIODevice, DeviceStatesAddedClose)
   CALL(test_is_Closed(m_input_device));
   CALL(test_is_Closed(m_output_device));
   EXPECT_TRUE(input_releaser);
-  EXPECT_TRUE(output_releaser);
+  EXPECT_TRUE(output_releaser);         // Can sporadically fail - try running the test again.
 }
 
 TEST_F(TestIODevice, DeviceStatesActiveClose)

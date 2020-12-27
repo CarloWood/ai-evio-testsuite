@@ -44,6 +44,10 @@ class MyListenSocket : public evio::ListenSocket<MyAcceptedSocket>
     // Write 10 kbyte of data.
     for (int n = 0; n < large_minimum_block_size / 100; ++n)
       accepted_socket() << "START012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789END.\n";     // Write to output buffer.
+
+    // Write 10 bytes of the next message (incomplete).
+    accepted_socket() << "START01234";
+
     // We're done with writing to this socket.
     accepted_socket() << std::flush;            // Start writing to socket.
 
@@ -51,8 +55,8 @@ class MyListenSocket : public evio::ListenSocket<MyAcceptedSocket>
     // before we write the next message to that socket.
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    // Write one more 100 byte message.
-    accepted_socket() << "START012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789END." << std::endl;;
+    // Write one more 90 byte message.
+    accepted_socket() << "5678901234567890123456789012345678901234567890123456789012345678901234567890123456789END." << std::endl;;
     accepted_socket.flush_output_device();      // Close output device as soon as buffer is empty.
   }
 };
@@ -110,7 +114,7 @@ void MyXDecoder::decode(int& allow_deletion_count, evio::MsgBlock&& CWDEBUG_ONLY
   // Switch protocol after receiving the first 16300 bytes.
   if (m_received == 16300)
   {
-    change_specs(utils::malloc_size(1000 + sizeof(evio::MemoryBlock)) - sizeof(evio::MemoryBlock), 8000, static_cast<size_t>(-1));
+    change_specs(utils::malloc_size(1000 + sizeof(evio::MemoryBlock)) - sizeof(evio::MemoryBlock), 8000, 16000);
   }
 
   // Close the socket as soon as 16400 bytes were received.
