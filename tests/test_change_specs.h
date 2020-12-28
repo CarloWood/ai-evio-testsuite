@@ -61,32 +61,46 @@ class MyListenSocket : public evio::ListenSocket<MyAcceptedSocket>
   }
 };
 
-class MyXDecoder : public evio::protocol::Decoder
+class MyYDecoder : public evio::protocol::Decoder
 {
  private:
-  size_t minimum_block_size() const override { return large_minimum_block_size; }
+  size_t minimum_block_size() const override { return 2016; }
 
  private:
   int m_received;
 
  public:
+  MyYDecoder() : m_received(0) { }
+
+ public:
+  void decode(int& allow_deletion_count, evio::MsgBlock&& CWDEBUG_ONLY(msg)) override;
+};
+
+class MyXDecoder : public evio::protocol::Decoder
+{
+ private:
+  int m_received;
+  MyYDecoder m_ydecoder;
+
+ public:
   MyXDecoder() : m_received(0) { }
 
  public:
+  size_t minimum_block_size() const override { return large_minimum_block_size; }
   void decode(int& allow_deletion_count, evio::MsgBlock&& CWDEBUG_ONLY(msg)) override;
 };
 
 class MySocket : public evio::Socket
 {
  private:
-  MyXDecoder m_decoder;
+  MyXDecoder m_xdecoder;
   evio::OutputStream m_output_stream;
 
  public:
   MySocket()
   {
     DoutEntering(dc::notice, "MySocket::MySocket()");
-    set_protocol_decoder(m_decoder);
+    set_protocol_decoder(m_xdecoder);
     set_source(m_output_stream);
     //on_connected([this](int& allow_deletion_count, bool success){ connected(allow_deletion_count, success); });
   }
@@ -113,12 +127,18 @@ void MyXDecoder::decode(int& allow_deletion_count, evio::MsgBlock&& CWDEBUG_ONLY
 
   // Switch protocol after receiving the first 16300 bytes.
   if (m_received == 16300)
-  {
-    change_specs(utils::malloc_size(1000 + sizeof(evio::MemoryBlock)) - sizeof(evio::MemoryBlock), 8000, 16000);
-  }
+    switch_protocol_decoder(m_ydecoder, 8000, 16000);
+}
 
-  // Close the socket as soon as 16400 bytes were received.
-  if (m_received == 16400)
+void MyYDecoder::decode(int& allow_deletion_count, evio::MsgBlock&& CWDEBUG_ONLY(msg))
+{
+  DoutEntering(dc::notice, "MyYDecoder::decode({" << allow_deletion_count << "}, \"" << libcwd::buf2str(msg.get_start(), msg.get_size()) << "\")");
+
+  m_received += msg.get_size();
+  Dout(dc::notice, "Received " << m_received << " bytes in total.");
+
+  // Close the socket as soon as 100 bytes were received.
+  if (m_received == 100)
   {
     close_input_device(allow_deletion_count);
     test_finished_type::wat test_finished_w(test_finished_cv);
