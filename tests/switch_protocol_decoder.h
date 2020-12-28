@@ -6,7 +6,7 @@
 #include "debug.h"
 #include <libcwd/buf2str.h>
 
-namespace test_change_specs {
+namespace test_switch_protocol_decoder {
 
 using test_finished_type = aithreadsafe::Wrapper<bool, aithreadsafe::policy::Primitive<aithreadsafe::ConditionVariable>>;
 test_finished_type test_finished_cv;
@@ -150,7 +150,7 @@ void MyYDecoder::decode(int& allow_deletion_count, evio::MsgBlock&& CWDEBUG_ONLY
   }
 }
 
-} // namespace test_change_specs
+} // namespace test_switch_protocol_decoder
 
 #include "EventLoopFixture.h"
 
@@ -158,7 +158,7 @@ using change_specsFixture = EventLoopFixture<testing::Test>;
 
 TEST_F(change_specsFixture, change_specs)
 {
-  using namespace test_change_specs;
+  using namespace test_switch_protocol_decoder;
 
   // Create a listen socket.
   static evio::SocketAddress const listen_address("127.0.0.1:9002");

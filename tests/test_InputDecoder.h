@@ -31,6 +31,12 @@ class MyInputDevice : public NoEpollInputDevice
     state_t::wat state_w(m_state);
     state_w->m_flags.set_regular_file();
   }
+
+  void reset()
+  {
+    if (m_ibuffer->release(CWDEBUG_ONLY(this)))
+      m_ibuffer = nullptr;
+  }
 };
 
 class MyDecoder : public evio::protocol::Decoder
@@ -138,6 +144,8 @@ TEST_F(DecoderFixture, create_buffer)
     ASSERT_EQ(input_device->get_ibuffer()->m_max_allocated_block_size, expected_max_allocated_block_size);
 
     delete decoder;
+
+    input_device->reset();
   }
 
   // Clean up.
