@@ -484,9 +484,9 @@ class LinkBufferFixture : public EventLoopFixture<testing::Test>
     m_min_block_size = utils::malloc_size(m_buffer->m_minimum_block_size + sizeof(evio::MemoryBlock)) - sizeof(evio::MemoryBlock);
     ASSERT(m_min_block_size == minimum_block_size);
     // Use the link buffer for our ostream object.
-    m_output.rdbuf(m_buffer->rdbuf());
+    m_output.rdbuf(m_buffer);
     // And also for our istream object.
-    m_input.rdbuf(m_buffer->rdbuf());
+    m_input.rdbuf(m_buffer);
   }
 
   void TearDown()

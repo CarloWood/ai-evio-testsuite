@@ -60,7 +60,7 @@ class MyDecoder : public evio::protocol::Decoder
     evio::protocol::Decoder::stop_input_device();
   }
 
-  size_t end_of_msg_finder(char const* new_data, size_t rlen) override
+  std::streamsize end_of_msg_finder(char const* new_data, size_t rlen) override
   {
     return evio::protocol::Decoder::end_of_msg_finder(new_data, rlen);
   }

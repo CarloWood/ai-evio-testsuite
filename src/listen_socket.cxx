@@ -28,7 +28,7 @@ class MyAcceptedSocketDecoder : public Decoder
   MyAcceptedSocketDecoder() : m_received(0) { }
 
  protected:
-  size_t end_of_msg_finder(char const* new_data, size_t rlen) override { return rlen; }
+  std::streamsize end_of_msg_finder(char const* new_data, size_t rlen) override { return rlen; }
   void decode(int& allow_deletion_count, MsgBlock&& msg) override;
 };
 

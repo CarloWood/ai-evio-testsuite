@@ -22,7 +22,7 @@ class MyDecoder : public evio::protocol::Decoder
   MyDecoder() : m_received(0), m_pn(0) { }
 
  protected:
-  size_t end_of_msg_finder(char const* new_data, size_t rlen) override;
+  std::streamsize end_of_msg_finder(char const* new_data, size_t rlen) override;
   void decode(int& allow_deletion_count, evio::MsgBlock&& msg) override;
 };
 
@@ -76,7 +76,7 @@ int main()
   }
 }
 
-size_t MyDecoder::end_of_msg_finder(char const* new_data, size_t rlen)
+std::streamsize MyDecoder::end_of_msg_finder(char const* new_data, size_t rlen)
 {
   DoutEntering(dc::notice, "MyDecoder::end_of_msg_finder(\"" << buf2str(new_data, rlen) << "\", " << rlen << ")");
   // Find a newline character, or if that doesn't exist, the phrase "</html>".
