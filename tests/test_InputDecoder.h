@@ -60,9 +60,9 @@ class MyDecoder : public evio::protocol::Decoder
     evio::protocol::Decoder::stop_input_device();
   }
 
-  std::streamsize end_of_msg_finder(char const* new_data, size_t rlen) override
+  size_t end_of_msg_finder(char const* new_data, size_t rlen, evio::EndOfMsgFinderResult& result) override
   {
-    return evio::protocol::Decoder::end_of_msg_finder(new_data, rlen);
+    return evio::protocol::Decoder::end_of_msg_finder(new_data, rlen, result);
   }
 
  public:
@@ -173,7 +173,8 @@ TEST_F(DecoderFixture, end_of_msg_finder)
   for (int i = 0; i < ssizeof(test_msgs) / ssizeof(char const*); ++i)
   {
     size_t rlen = std::strlen(test_msgs[i]);
-    size_t len = decoder.end_of_msg_finder(test_msgs[i], rlen);
+    evio::EndOfMsgFinderResult result;
+    size_t len = decoder.end_of_msg_finder(test_msgs[i], rlen, result);
     size_t pos;
     if ((pos = std::string(test_msgs[i]).find('\n')) == std::string::npos)
       EXPECT_EQ(len, 0UL);
