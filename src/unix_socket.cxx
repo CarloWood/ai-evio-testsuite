@@ -18,6 +18,12 @@ class MyDecoder : public evio::protocol::Decoder
   MyDecoder() : m_received(0) { }
 
  protected:
+  size_t end_of_msg_finder(char const* new_data, size_t rlen, evio::EndOfMsgFinderResult& UNUSED_ARG(result)) override
+  {
+    DoutEntering(dc::io, "MyDecoder::end_of_msg_finder(..., " << rlen << ")");
+    char const* newline = static_cast<char const*>(std::memchr(new_data, '!', rlen));
+    return newline ? newline - new_data + 1 : 0;
+  }
   void decode(int& allow_deletion_count, evio::MsgBlock&& msg) override;
 };
 
@@ -56,9 +62,8 @@ int main()
 
     auto unix_socket = evio::create<MyUNIXSocket>();
     unix_socket->set_source(unix_socket_source);
-    unix_socket->connect(endpoint);
-
     unix_socket_source << "Hello world!" << std::endl;
+    unix_socket->connect(endpoint);
     unix_socket->flush_output_device();
 
     event_loop.join();
