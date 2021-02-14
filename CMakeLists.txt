@@ -5,7 +5,7 @@ project(evio-testsuite
         DESCRIPTION "Testsuite for git submodule evio.")
 
 # Begin of gitache configuration.
-set(GITACHE_PACKAGES libcwd_r)
+set(GITACHE_PACKAGES magic_enum libcwd_r)
 include(cwm4/cmake/StableGitache)
 # End of gitache configuration.
 
