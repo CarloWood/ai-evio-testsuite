@@ -14,11 +14,11 @@ int main()
   try
   {
     evio::BinaryData b1;
-    xmlrpc::initialize(b1, base64_str);
+    evio::protocol::xmlrpc::initialize(b1, base64_str);
     Dout(dc::notice, "b1 = " << b1);
 
     evio::DateTime d1;
-    xmlrpc::initialize(d1, iso8601_str);
+    evio::protocol::xmlrpc::initialize(d1, iso8601_str);
     Dout(dc::notice, "d1 = " << d1);
   }
   catch (AIAlert::Error const& error)
