@@ -2,7 +2,7 @@
 #include "evio/AcceptedSocket.h"
 #include "evio/EventLoop.h"
 #include "threadpool/Timer.h"
-#include "utils/AISignals.h"
+#include "utils/Signals.h"
 #ifdef CWDEBUG
 #include <libcwd/buf2str.h>
 #endif
@@ -100,7 +100,7 @@ TEST(Socket, Constructor)
   using namespace test_socket;
 
   // Initialize signals. SIGPIPE *must* be ignored or write() won't return EPIPE when peer closed the connection.
-  AISignals signals({SIGPIPE});
+  utils::Signals signals({SIGPIPE});
 
   // Create a thread pool.
   AIThreadPool thread_pool;

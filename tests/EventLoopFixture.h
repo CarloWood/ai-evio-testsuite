@@ -7,7 +7,7 @@ template<typename BASE = testing::Test>
 class EventLoopFixture : public BASE
 {
  private:
-  AISignals m_signals;
+  utils::Signals m_signals;
   AIThreadPool m_thread_pool;
   evio::EventLoop* m_event_loop;
   AIQueueHandle m_low_priority_handler;
@@ -23,13 +23,13 @@ class EventLoopFixture : public BASE
     Dout(dc::notice, "v EventLoopFixture::SetUp()");
     debug::Mark setup;
 #endif
-    utils::Signals::instance().reserve({SIGPIPE}, 0);
+    utils::Signal::instance().reserve({SIGPIPE}, 0);
     if constexpr (!std::is_same_v<BASE, testing::Test>)
       BASE::SetUp();
     [[maybe_unused]] AIQueueHandle high_priority_handler = m_thread_pool.new_queue(32);
     [[maybe_unused]] AIQueueHandle medium_priority_handler = m_thread_pool.new_queue(32);
     m_low_priority_handler = m_thread_pool.new_queue(16);
-    utils::Signals::unblock(SIGPIPE);   // Unblock sigpipe for the event handler thread.
+    utils::Signal::unblock(SIGPIPE);   // Unblock sigpipe for the event handler thread.
     m_timer = new threadpool::Timer;
     m_event_loop = new evio::EventLoop(m_low_priority_handler);
     m_clean_exit = true;
@@ -69,7 +69,7 @@ class EventLoopFixture : public BASE
     destruct_thread_pool();
     if constexpr (!std::is_same_v<BASE, testing::Test>)
       BASE::TearDown();
-    utils::Signals::instance().block_and_unregister(SIGPIPE);
+    utils::Signal::instance().block_and_unregister(SIGPIPE);
   }
 
   void force_exit()

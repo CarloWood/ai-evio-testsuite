@@ -1,6 +1,6 @@
 #include "sys.h"
 #include "debug.h"
-#include "utils/AISignals.h"
+#include "utils/Signals.h"
 #include "signal_safe_printf.h"
 #include "utils/cpu_relax.h"
 #include <thread>
@@ -9,6 +9,7 @@
 #include <sys/epoll.h>
 
 using utils::Signals;
+using utils::Signal;
 
 extern "C" void sigint_cb(int signum)
 {
@@ -27,7 +28,7 @@ void thread1(int sn1)
 {
   Debug(NAMESPACE_DEBUG::init_thread());
 
-  Signals::unblock(sn1, my_cb);
+  Signal::unblock(sn1, my_cb);
 
   while (!done)
     cpu_relax();
@@ -60,16 +61,16 @@ int main()
 {
   Debug(NAMESPACE_DEBUG::init());
 
-  AISignals s1({});
-  AISignals s2({}, 1);
-  AISignals s3({SIGINT});
-  AISignals s4({SIGINT}, 1);
-  AISignals s5({SIGINT, SIGABRT});
-  AISignals signals({SIGINT, SIGABRT}, 3);
+  Signals s1({});
+  Signals s2({}, 1);
+  Signals s3({SIGINT});
+  Signals s4({SIGINT}, 1);
+  Signals s5({SIGINT, SIGABRT});
+  Signals signals({SIGINT, SIGABRT}, 3);
 
-  int sn1 = Signals::next_rt_signum();
-  int sn2 = Signals::next_rt_signum();
-  int sn3 = Signals::next_rt_signum();
+  int sn1 = Signal::next_rt_signum();
+  int sn2 = Signal::next_rt_signum();
+  int sn3 = Signal::next_rt_signum();
   signals.register_callback(sn2, my_cb);
   signals.register_callback(sn3, my_cb);
 
@@ -77,7 +78,7 @@ int main()
   std::thread t2(thread2, sn2, sn3);
 
   // Accept ^C.
-  Signals::default_handler(SIGINT);
+  Signal::default_handler(SIGINT);
 
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
   Dout(dc::notice, "Sending signals...");
