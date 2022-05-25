@@ -4,6 +4,11 @@ project(evio-testsuite
         LANGUAGES C CXX
         DESCRIPTION "Testsuite for git submodule evio.")
 
+# Compile all subdirectories with the same standard.
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 # Begin of gitache configuration.
 set(GITACHE_PACKAGES magic_enum libcwd_r)
 include(cwm4/cmake/StableGitache)

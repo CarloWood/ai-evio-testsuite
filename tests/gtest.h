@@ -91,9 +91,9 @@ class GtestThrowListener : public testing::EmptyTestEventListener
           ::testing::internal::CodeLocation(__FILE__, __LINE__),              \
           (::testing::internal::GetTypeId<test_fixture>()),                   \
           ::testing::internal::SuiteApiResolver<                              \
-              test_fixture>::GetSetUpCaseOrSuite(),                           \
+              test_fixture>::GetSetUpCaseOrSuite(__FILE__, __LINE__),         \
           ::testing::internal::SuiteApiResolver<                              \
-              test_fixture>::GetTearDownCaseOrSuite(),                        \
+              test_fixture>::GetTearDownCaseOrSuite(__FILE__, __LINE__),      \
           new ::testing::internal::TestFactoryImpl<CW_GTEST_TEST_CLASS_NAME_( \
               test_fixture, test_name)>);                                     \
   void CW_GTEST_TEST_CLASS_NAME_(test_fixture, test_name)::TestBody()         \

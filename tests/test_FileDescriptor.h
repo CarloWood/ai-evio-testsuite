@@ -559,7 +559,7 @@ void TestInputDevice::test_close_input_device_closes_fd(bool started)
   m_closed_called  = false;
   RefCountReleaser rcr = close_input_device();
   EXPECT_TRUE(m_closed_called);                 // closed() was called.
-  EXPECT_EQ(rcr, started);                      // If nad_rcr is true then going out of scope will call allow_deletion(),
+  EXPECT_EQ(static_cast<bool>(rcr), started);   // If nad_rcr is true then going out of scope will call allow_deletion(),
                                                 // but that is obviously only needed when the device was inhibited for deletion because it was started.
 }
 
@@ -569,7 +569,7 @@ void TestInputDevice::test_close_closes_input_fd(bool started)
   m_closed_called  = false;
   RefCountReleaser rcr = close();
   EXPECT_TRUE(m_closed_called);       // closed() was called.
-  EXPECT_EQ(rcr, started);
+  EXPECT_EQ(static_cast<bool>(rcr), started);
 }
 
 //-----------------------------------------------------------------------------
@@ -642,7 +642,7 @@ void TestOutputDevice::test_close_output_device_closes_fd(bool started)
   m_closed_called  = false;
   RefCountReleaser rcr = close_output_device();
   EXPECT_TRUE(m_closed_called);         // closed() was called.
-  EXPECT_EQ(rcr, started);              // If nad_rcr is true then going out of scope will call allow_deletion(),
+  EXPECT_EQ(static_cast<bool>(rcr), started);              // If nad_rcr is true then going out of scope will call allow_deletion(),
                                         // but that is obviously only needed when the device was inhibited for deletion because it was started.
 }
 
@@ -652,7 +652,7 @@ void TestOutputDevice::test_close_closes_output_fd(bool started)
   m_closed_called  = false;
   RefCountReleaser rcr = close();
   EXPECT_TRUE(m_closed_called);       // closed() was called.
-  EXPECT_EQ(rcr, started);
+  EXPECT_EQ(static_cast<bool>(rcr), started);
 }
 
 //-----------------------------------------------------------------------------
@@ -692,7 +692,7 @@ void TestInputDevice::test_disable_input_device(bool started, bool close)
   // In order to let TestDestruction::TearDown() not fail, call close_input_device() here.
   // This is also allowed when the device is already closed.
   RefCountReleaser rcr = close_input_device();
-  EXPECT_EQ(rcr, !close);
+  EXPECT_EQ(static_cast<bool>(rcr), !close);
 }
 
 //-----------------------------------------------------------------------------
@@ -739,7 +739,7 @@ void TestOutputDevice::test_disable_output_device(bool started, bool close)
   // In order to let TestDestruction::TearDown() not fail, call close_output_device() here.
   // This is also allowed when the device is already closed.
   RefCountReleaser rcr = close_output_device();
-  EXPECT_EQ(rcr, !close);
+  EXPECT_EQ(static_cast<bool>(rcr), !close);
 }
 
 //-----------------------------------------------------------------------------
