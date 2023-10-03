@@ -2,13 +2,16 @@
 #include "evio/AcceptedSocket.h"
 #include "evio/ListenSocket.h"
 #include "threadsafe/ConditionVariable.h"
-#include "threadsafe/aithreadsafe.h"
+#include "threadsafe/threadsafe.h"
 #include "debug.h"
 #include <libcwd/buf2str.h>
 
 namespace test_switch_protocol_decoder {
 
-using test_finished_type = aithreadsafe::Wrapper<bool, aithreadsafe::policy::Primitive<aithreadsafe::ConditionVariable>>;
+struct Boolean {
+  bool value_;
+};
+using test_finished_type = threadsafe::Unlocked<Boolean, threadsafe::policy::Primitive<threadsafe::ConditionVariable>>;
 test_finished_type test_finished_cv;
 
 size_t const large_minimum_block_size = (1 << 14) - evio::block_overhead_c;     // 16352 bytes.
@@ -142,7 +145,7 @@ void MyYDecoder::decode(int& allow_deletion_count, evio::MsgBlock&& CWDEBUG_ONLY
   {
     close_input_device(allow_deletion_count);
     test_finished_type::wat test_finished_w(test_finished_cv);
-    *test_finished_w = true;
+    test_finished_w->value_ = true;
     test_finished_w.notify_one();
 
     MySocket* socket = static_cast<MySocket*>(m_input_device);
@@ -175,7 +178,7 @@ TEST_F(change_specsFixture, change_specs)
   Dout(dc::notice, "Waiting for test_finished_cv to become true.");
   {
     test_finished_type::wat test_finished_w(test_finished_cv);
-    test_finished_w.wait([&](){ return *test_finished_w; });
+    test_finished_w.wait([&](){ return test_finished_w->value_; });
   }
   Dout(dc::notice, "test_finished_cv became true.");
 

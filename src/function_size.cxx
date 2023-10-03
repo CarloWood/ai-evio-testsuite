@@ -1,6 +1,7 @@
 #include <iostream>
 #include <functional>
 #include <cstring>
+#include <cstdint>
 
 void h(std::function<void(void*)>&& f, void* g)
 {
