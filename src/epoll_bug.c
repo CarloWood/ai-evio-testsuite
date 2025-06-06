@@ -61,6 +61,7 @@ int const rcvbuf_size = SIZE;
 #include <errno.h>
 #include <stdio.h>
 #include <assert.h>
+#include <stdbool.h>
 #include <sys/time.h>
 
 struct Epoll;
@@ -74,7 +75,6 @@ typedef struct EventObj EventObj;
 typedef struct ListenSocket ListenSocket;
 typedef struct ClientSocket ClientSocket;
 typedef struct AcceptSocket AcceptSocket;
-typedef int bool;
 
 bool ListenSocket_read_event(EventObj* self_event, Epoll* epoll_obj);
 bool AcceptSocket_write_event(EventObj* self_event, Epoll* epoll_obj);

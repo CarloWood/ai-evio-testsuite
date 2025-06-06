@@ -9,6 +9,7 @@
 #include <string>
 #include <sstream>
 #include <boost/asio.hpp>
+#include <boost/array.hpp>
 #include <boost/enable_shared_from_this.hpp>
 #include <boost/bind/bind.hpp>
 
@@ -134,8 +135,8 @@ class tcp_connection;
 class Reply
 {
  public:
-  Reply(boost::asio::io_service& io_service, boost::shared_ptr<tcp_connection> const& connection, char const* s, size_t l) :
-      m_timer(new boost::asio::deadline_timer(io_service)), m_str(s, l), m_sleep(0), m_must_close(false), m_has_request(false), m_connection(connection) { }
+  Reply(boost::asio::io_context& io_context, boost::shared_ptr<tcp_connection> const& connection, char const* s, size_t l) :
+      m_timer(new boost::asio::deadline_timer(io_context)), m_str(s, l), m_sleep(0), m_must_close(false), m_has_request(false), m_connection(connection) { }
   void set_sleeping(unsigned long sleep);
   bool is_sleeping() const { return m_sleep != 0; }
   void set_must_close() { m_must_close = true; }
@@ -174,9 +175,9 @@ class tcp_connection : public boost::enable_shared_from_this<tcp_connection>
  public:
   typedef boost::shared_ptr<tcp_connection> pointer;
 
-  static pointer create(boost::asio::io_service& io_service, int instance)
+  static pointer create(boost::asio::io_context& io_context, int instance)
   {
-    return pointer(new tcp_connection(io_service, instance));
+    return pointer(new tcp_connection(io_context, instance));
   }
 
   tcp::socket& socket()
@@ -194,9 +195,9 @@ class tcp_connection : public boost::enable_shared_from_this<tcp_connection>
   }
 
  private:
-  tcp_connection(boost::asio::io_service& io_service, int instance) :
-    m_io_service(io_service), m_instance(instance), m_reply(0), m_closed(false),
-    m_socket(io_service), m_eom("\r\n\r\n"), m_sleep(0), m_must_close(false), m_request(0) { }
+  tcp_connection(boost::asio::io_context& io_context, int instance) :
+    m_io_context(io_context), m_instance(instance), m_reply(0), m_closed(false),
+    m_socket(io_context), m_eom("\r\n\r\n"), m_sleep(0), m_must_close(false), m_request(0) { }
 
   void handle_read(const boost::system::error_code& e, std::size_t bytes_transferred)
   {
@@ -290,7 +291,7 @@ class tcp_connection : public boost::enable_shared_from_this<tcp_connection>
     size = std::snprintf(buf, sizeof(buf), reply, strlen(body) + 27, m_instance, m_request, m_reply, body);
     ASSERT(size < ssizeof(buf));
     std::string reply_formatted(buf, size);
-    m_reply_queue.push_back(Reply(m_io_service, shared_from_this(), buf, size));
+    m_reply_queue.push_back(Reply(m_io_context, shared_from_this(), buf, size));
     Reply* rp = &m_reply_queue.back();
     if (m_request)
     {
@@ -391,7 +392,7 @@ class tcp_connection : public boost::enable_shared_from_this<tcp_connection>
   }
 
  private:
-  boost::asio::io_service& m_io_service;
+  boost::asio::io_context& m_io_context;
   int m_instance;
   int m_reply;
   bool m_closed;
@@ -417,7 +418,7 @@ void Reply::timed_out(boost::system::error_code const& error)
 class tcp_server
 {
  public:
-  tcp_server(boost::asio::io_service& io_service) : m_io_service(io_service), m_acceptor(io_service, tcp::endpoint(tcp::v4(), 9001)), m_count(0)
+  tcp_server(boost::asio::io_context& io_context) : m_io_context(io_context), m_acceptor(io_context, tcp::endpoint(tcp::v4(), 9001)), m_count(0)
   {
     m_acceptor.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
     start();
@@ -437,7 +438,7 @@ class tcp_server
  private:
   void start_accept()
   {
-    tcp_connection::pointer new_connection = tcp_connection::create(m_io_service, ++m_count);
+    tcp_connection::pointer new_connection = tcp_connection::create(m_io_context, ++m_count);
     m_acceptor.async_accept(new_connection->socket(), boost::bind(&tcp_server::handle_accept, this, new_connection, boost::asio::placeholders::error));
   }
 
@@ -450,7 +451,7 @@ class tcp_server
     start_accept();
   }
 
-  boost::asio::io_service& m_io_service;
+  boost::asio::io_context& m_io_context;
   tcp::acceptor m_acceptor;
   int m_count;
 };
@@ -466,11 +467,11 @@ class HtmlPipeLineServerFixture : public testing::Test
 {
  private:
   std::thread m_thread;
-  boost::asio::io_service m_io_service;
+  boost::asio::io_context m_io_context;
   test_html_server::tcp_server m_server;
 
  protected:
-  HtmlPipeLineServerFixture() : m_server(m_io_service) { }
+  HtmlPipeLineServerFixture() : m_server(m_io_context) { }
 
   void SetUp()
   {
@@ -481,11 +482,11 @@ class HtmlPipeLineServerFixture : public testing::Test
     std::thread thr([this](){
           Debug(debug::init_thread("HtmlServer"));
           Dout(dc::notice, "Thread started.");
-          m_io_service.reset();
+          m_io_context.restart();
           m_server.start();
-          Dout(dc::notice|flush_cf, "Calling m_io_service.run()...");
-          m_io_service.run();
-          Dout(dc::notice|flush_cf, "Returned from m_io_service.run().");
+          Dout(dc::notice|flush_cf, "Calling m_io_context.run()...");
+          m_io_context.run();
+          Dout(dc::notice|flush_cf, "Returned from m_io_context.run().");
         });
     m_thread = std::move(thr);
   }
@@ -493,7 +494,7 @@ class HtmlPipeLineServerFixture : public testing::Test
   void TearDown()
   {
     Dout(dc::notice, "v HtmlPipeLineServerFixture::TearDown()");
-    m_io_service.stop();
+    m_io_context.stop();
     m_server.stop();
     Dout(dc::notice, "Calling m_thread.join()");
     m_thread.join();

@@ -25,8 +25,18 @@ TEST(inet_support, print_hostent_on)
   Dout(dc::notice, "evio::print_hostent_on(\"" << host_name << "\") -->\n" << ss.str());
 
   // Examine the result.
+  //
+  // Currently the result is:
+  //   The official name of the host: "me-ycpi-cf-www.g06.yahoodns.net"
+  //   Aliases:
+  //   "www.yahoo.com"
+  //   Address length in bytes: 4
+  //   Network addresses:
+  //   "87.248.116.12"
+  //   "87.248.116.11"
+  //
   EXPECT_THAT(ss.str(), MatchesRegex(
-        ".*[^w]w{0,2}\\.yahoo\\.com\".*\n"             // Official name (ends on .yahoo.com but isn't www.yahoo.com).
+        ".*\\.yahoodns\\.net\".*\n"                    // Official name (ends on .yahoodns.net).
         ".*[Aa]lias.*\"www\\.yahoo\\.com\".*\n"        // At least one alias "www.yahoo.com".
         ".*[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+.*\n"      // At least two IP#'s.
         ".*[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+.*\n"
