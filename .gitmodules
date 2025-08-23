@@ -29,3 +29,6 @@
 [submodule "gnuplot-iostream"]
 	path = gnuplot-iostream
 	url = https://github.com/dstahlke/gnuplot-iostream.git
+[submodule "memory"]
+	path = memory
+	url = https://github.com/CarloWood/memory.git
