@@ -132,11 +132,17 @@ void header::feed(char c)
 
 class tcp_connection;
 
+// Reply stores one pending HTTP response for the test server.  It can delay
+// delivery by arming an asynchronous timer for the requested number of
+// milliseconds; when the timer expires it clears the sleeping state and asks
+// the owning connection to resume writing queued replies.  Resetting the timer
+// cancels the wait when a reply is explicitly woken, and an operation_aborted
+// completion is intentionally ignored by timed_out().
 class Reply
 {
  public:
   Reply(boost::asio::io_context& io_context, boost::shared_ptr<tcp_connection> const& connection, char const* s, size_t l) :
-      m_timer(new boost::asio::deadline_timer(io_context)), m_str(s, l), m_sleep(0), m_must_close(false), m_has_request(false), m_connection(connection) { }
+      m_timer(new boost::asio::steady_timer(io_context)), m_str(s, l), m_sleep(0), m_must_close(false), m_has_request(false), m_connection(connection) { }
   void set_sleeping(unsigned long sleep);
   bool is_sleeping() const { return m_sleep != 0; }
   void set_must_close() { m_must_close = true; }
@@ -148,7 +154,7 @@ class Reply
   void timed_out(boost::system::error_code const& error);
 
  private:
-  boost::shared_ptr<boost::asio::deadline_timer> m_timer;
+  boost::shared_ptr<boost::asio::steady_timer> m_timer;
   std::string m_str;
   unsigned long m_sleep;
   bool m_must_close;
@@ -161,7 +167,7 @@ void Reply::set_sleeping(unsigned long sleep)
   if (sleep > 0)
   {
     m_sleep = sleep;
-    m_timer->expires_from_now(boost::posix_time::millisec(m_sleep));
+    m_timer->expires_after(std::chrono::milliseconds(m_sleep));
     m_timer->async_wait(boost::bind(&Reply::timed_out, this, boost::asio::placeholders::error));
   }
   else
