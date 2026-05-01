@@ -51,7 +51,7 @@ int main()
   AIThreadPool thread_pool;
   AIQueueHandle low_priority_handler = thread_pool.new_queue(16);
 
-  // An object that allows as to write to an ostream
+  // An object that allows us to write to an ostream
   // in order to write to (the buffer of) the socket.
   evio::OutputStream socket_stream;
 

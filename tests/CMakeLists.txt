@@ -1,7 +1,7 @@
 include( AICxxProject )
 
 find_package( Threads REQUIRED )
-find_package( Boost CONFIG REQUIRED COMPONENTS program_options system )
+find_package( Boost CONFIG REQUIRED COMPONENTS program_options )
 
 add_library( libgtest STATIC )
 
@@ -37,7 +37,6 @@ target_link_libraries( google_test
         ${AICXX_OBJECTS_LIST}
         libgtest
         Boost::program_options
-        Boost::system
 )
 
 set( TESTS google_test )
