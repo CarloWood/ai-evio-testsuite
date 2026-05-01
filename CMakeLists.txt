@@ -29,6 +29,7 @@ set(INSTALL_GTEST OFF CACHE BOOL "")
 
 include(AICxxSubmodules)
 
+add_subdirectory(enchantum)
 add_subdirectory(src)
 add_subdirectory(googletest)
 add_subdirectory(tests)
