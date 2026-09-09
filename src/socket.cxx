@@ -34,7 +34,7 @@ class MySocket : public Socket
 };
 
 #ifdef CWDEBUG
-using debug::Mark;
+using libcwd::Mark;
 #endif
 
 int main()

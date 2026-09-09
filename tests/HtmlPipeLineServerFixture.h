@@ -483,7 +483,7 @@ class HtmlPipeLineServerFixture : public testing::Test
   {
 #ifdef CWDEBUG
     Dout(dc::notice, "v HtmlPipeLineServerFixture::SetUp()");
-    debug::Mark setup;
+    libcwd::Mark setup;
 #endif
     std::thread thr([this](){
           Debug(debug::init_thread("HtmlServer"));

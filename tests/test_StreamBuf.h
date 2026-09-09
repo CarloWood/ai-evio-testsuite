@@ -75,7 +75,7 @@ class OutputBufferFixture : public EventLoopFixture<testing::Test>
   {
 #ifdef CWDEBUG
     Dout(dc::notice, "v OutputBufferFixture::SetUp()");
-    debug::Mark setup;
+    libcwd::Mark setup;
 #endif
 
     EventLoopFixture<testing::Test>::SetUp();
@@ -95,7 +95,7 @@ class OutputBufferFixture : public EventLoopFixture<testing::Test>
   {
 #ifdef CWDEBUG
     Dout(dc::notice, "v OutputBufferFixture::TearDown()");
-    debug::Mark setup;
+    libcwd::Mark setup;
 #endif
 
     m_output_device->close();
@@ -356,7 +356,7 @@ class InputBufferFixture : public testing::Test
   {
 #ifdef CWDEBUG
     Dout(dc::notice, "v InputBufferFixture::SetUp()");
-    debug::Mark setup;
+    libcwd::Mark setup;
 #endif
 
     // Get some valid fd.
@@ -377,7 +377,7 @@ class InputBufferFixture : public testing::Test
   {
 #ifdef CWDEBUG
     Dout(dc::notice, "v InputBufferFixture::TearDown()");
-    debug::Mark teardown;
+    libcwd::Mark teardown;
 #endif
     m_input_device.reset();
     // m_input can be reused (the call to set_protocol_decoder() above will effectively reset it).
@@ -461,7 +461,7 @@ class LinkBufferFixture : public EventLoopFixture<testing::Test>
   {
 #ifdef CWDEBUG
     Dout(dc::notice, "v LinkBufferFixture::SetUp()");
-    debug::Mark setup;
+    libcwd::Mark setup;
 #endif
     EventLoopFixture<testing::Test>::SetUp();
 
@@ -493,7 +493,7 @@ class LinkBufferFixture : public EventLoopFixture<testing::Test>
   {
 #ifdef CWDEBUG
     Dout(dc::notice, "v LinkBufferFixture::TearDown()");
-    debug::Mark teardown;
+    libcwd::Mark teardown;
 #endif
     m_input_device->close();
     m_output_device->close();
@@ -539,7 +539,7 @@ class RandomFixture : public LinkBufferFixture
   {
 #ifdef CWDEBUG
     Dout(dc::notice, "v RandomFixture::SetUp()");
-    debug::Mark setup;
+    libcwd::Mark setup;
 #endif
     LinkBufferFixture::SetUp();
     if (size_hash_pair.size > 1000)
@@ -554,7 +554,7 @@ class RandomFixture : public LinkBufferFixture
   {
 #ifdef CWDEBUG
     Dout(dc::notice, "v RandomFixture::TearDown()");
-    debug::Mark teardown;
+    libcwd::Mark teardown;
 #endif
 #ifdef DEBUGSTREAMBUFSTATS
     m_buffer->StreamBufProducer::dump_stats();

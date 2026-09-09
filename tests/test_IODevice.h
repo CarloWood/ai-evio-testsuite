@@ -171,7 +171,7 @@ class TestIODeviceNoInit : public EventLoopFixture<testing::Test>
   {
 #ifdef CWDEBUG
     Dout(dc::notice, "v TestIODeviceNoInit::SetUp()");
-    debug::Mark setup;
+    libcwd::Mark setup;
 #endif
     EventLoopFixture<testing::Test>::SetUp();
     int res = pipe2(pipefd, O_DIRECT | O_CLOEXEC);
@@ -186,7 +186,7 @@ class TestIODeviceNoInit : public EventLoopFixture<testing::Test>
   {
 #ifdef CWDEBUG
     Dout(dc::notice, "v TestIODeviceNoInit::TearDown()");
-    debug::Mark setup;
+    libcwd::Mark setup;
 #endif
     // Delete the device objects.
     m_input_device.reset();
@@ -207,7 +207,7 @@ class TestIODevice : public TestIODeviceNoInit
   {
 #ifdef CWDEBUG
     Dout(dc::notice, "v TestIODevice::SetUp()");
-    debug::Mark setup;
+    libcwd::Mark setup;
 #endif
     TestIODeviceNoInit::SetUp();
     m_input_device->init(pipefd[0]);
@@ -218,7 +218,7 @@ class TestIODevice : public TestIODeviceNoInit
   {
 #ifdef CWDEBUG
     Dout(dc::notice, "v TestIODevice::TearDown()");
-    debug::Mark setup;
+    libcwd::Mark setup;
 #endif
     if (m_input_device->is_active(evio::SingleThread()).is_momentary_true())
     {
@@ -702,7 +702,7 @@ class IODeviceFixture : public EventLoopFixture<HtmlPipeLineServerFixture>
   {
 #ifdef CWDEBUG
     Dout(dc::notice, "v IODeviceFixture::SetUp()");
-    debug::Mark setup;
+    libcwd::Mark setup;
 #endif
     EventLoopFixture<HtmlPipeLineServerFixture>::SetUp();
     io_device = evio::create<TestSocket>();
@@ -724,7 +724,7 @@ class IODeviceFixture : public EventLoopFixture<HtmlPipeLineServerFixture>
   {
 #ifdef CWDEBUG
     Dout(dc::notice, "v IODeviceFixture::TearDown()");
-    debug::Mark setup;
+    libcwd::Mark setup;
 #endif
     Dout(dc::notice|flush_cf, "Closing io_device " << io_device.get());
     io_device->close();

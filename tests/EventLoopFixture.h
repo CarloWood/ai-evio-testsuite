@@ -21,7 +21,7 @@ class EventLoopFixture : public BASE
   {
 #ifdef CWDEBUG
     Dout(dc::notice, "v EventLoopFixture::SetUp()");
-    debug::Mark setup;
+    libcwd::Mark setup;
 #endif
     utils::Signal::instance().reserve({SIGPIPE}, 0);
     if constexpr (!std::is_same_v<BASE, testing::Test>)
@@ -45,7 +45,7 @@ class EventLoopFixture : public BASE
   {
 #ifdef CWDEBUG
     Dout(dc::notice, "v EventLoopFixture::TearDown()");
-    debug::Mark setup;
+    libcwd::Mark setup;
 #endif
     // Fake "leaving the scope" of AIThreadPool and EventLoop...
     // Don't use this yourself.

@@ -20,6 +20,10 @@
 
 using namespace boost::program_options;
 
+namespace libcwd::init_functions {
+extern thread_init_t default_thread_init;
+} // namespace libcwd::init_functions
+
 bool g_debug_output_on;
 
 int main(int argc, char* argv[])
@@ -55,7 +59,7 @@ int main(int argc, char* argv[])
   Debug(if (!g_debug_output_on)
         {
           libcw_do.off();
-          NAMESPACE_DEBUG::thread_init_default = libcwd::debug_off;
+          libcwd::init_functions::default_thread_init = libcwd::init_functions::debug_off;
         }
       );
   Dout(dc::notice, "Debug output is turned on.");

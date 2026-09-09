@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.14...3.16)
+cmake_minimum_required(VERSION 3.14...4.4.2)
 
 project(evio-testsuite
         LANGUAGES C CXX
@@ -10,12 +10,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Begin of gitache configuration.
-set(GITACHE_PACKAGES libcwd_r)
-include(cwm4/cmake/StableGitache)
+set(GITACHE_PACKAGES libcwd)
+include(cmake/aicxx/cmake/StableGitache)
 # End of gitache configuration.
 
 # This project uses aicxx modules.
-include(cwm4/cmake/AICxxProject)
+include(cmake/aicxx/Project NO_POLICY_SCOPE)
 
 # Exit if someone tries to contaminate the source directory with an in-source build.
 if (${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})

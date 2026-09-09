@@ -207,7 +207,7 @@ class TestDestruction : public EventLoopFixture<testing::Test>
   {
 #ifdef CWDEBUG
     Dout(dc::notice, "v TestDestruction::SetUp()");
-    debug::Mark setup;
+    libcwd::Mark setup;
 #endif
     EventLoopFixture<testing::Test>::SetUp();
     CALL(FileDescriptor::reset_instance_count());
